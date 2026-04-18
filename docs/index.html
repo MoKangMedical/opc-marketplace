@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPC Marketplace - 供需对接平台</title>
+    <meta name="description" content="连接市场需求和OPC（一人公司）供给的双边平台">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --bg-card: #111118;
+            --bg-card-hover: #16161f;
+            --bg-surface: #0e0e15;
+            --border: #1e1e2e;
+            --border-hover: #2a2a40;
+            --text: #e4e4ef;
+            --text-dim: #8888a0;
+            --text-muted: #55556a;
+            --accent: #6c5ce7;
+            --accent-light: #a29bfe;
+            --accent-glow: rgba(108, 92, 231, 0.15);
+            --gold: #f0c040;
+            --green: #00d68f;
+            --red: #ff6b6b;
+            --blue: #4ecdc4;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-body: 'Inter', -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --radius: 12px;
+            --radius-lg: 20px;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding:  0; box-sizing: border-box; }
+
+        html {
+            scroll-behavior: smooth;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Navigation */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: rgba(10, 10, 15, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            transition: var(--transition);
+        }
+
+        .nav-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text);
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 1.15rem;
+        }
+
+        .logo-icon {
+            color: var(--accent);
+            font-size: 1.3rem;
+        }
+
+        .accent { color: var(--accent-light); }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 28px;
+        }
+
+        .nav-link {
+            text-decoration: none;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .nav-link:hover { color: var(--text); }
+
+        .nav-github {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 6px 14px;
+            border-radius: 8px;
+        }
+
+        .nav-github:hover {
+            border-color: var(--accent);
+            color: var(--accent-light);
+        }
+
+        /* Hero */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            padding: 120px 24px 80px;
+        }
+
+        .hero-bg {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .grid-lines {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(108, 92, 231, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(108, 92, 231, 0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+
+        .glow {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.4;
+        }
+
+        .glow-1 {
+            width: 600px;
+            height: 600px;
+            background: var(--accent);
+            top: -200px;
+            right: -100px;
+            opacity: 0.12;
+        }
+
+        .glow-2 {
+            width: 400px;
+            height: 400px;
+            background: var(--gold);
+            bottom: -100px;
+            left: -100px;
+            opacity: 0.08;
+        }
+
+        .hero-content {
+            text-align: center;
+            max-width: 800px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            letter-spacing: 3px;
+            color: var(--accent-light);
+            background: var(--accent-glow);
+            border: 1px solid rgba(108, 92, 231, 0.2);
+            padding: 8px 20px;
+            border-radius: 100px;
+            margin-bottom: 32px;
+        }
+
+        .hero-title {
+            font-family: var(--font-display);
+            font-size: clamp(2.5rem, 6vw, 4.5rem);
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 24px;
+        }
+
+        .hero-title .line { display: block; }
+
+        .gradient-text {
+            background: linear-gradient(135deg, var(--accent-light), var(--gold), var(--blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.15rem;
+            color: var(--text-dim);
+            max-width: 600px;
+            margin: 0 auto 48px;
+            line-height: 1.7;
+        }
+
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 48px;
+            margin-bottom: 48px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-num {
+            display: block;
+            font-family: var(--font-display);
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-light);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .hero-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--accent);
+            color: #fff;
+            text-decoration: none;
+            padding: 14px 32px;
+            border-radius: 100px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: var(--transition);
+            box-shadow: 0 0 40px rgba(108, 92, 231, 0.3);
+        }
+
+        .hero-cta:hover {
+            background: var(--accent-light);
+            transform: translateY(-2px);
+            box-shadow: 0 0 60px rgba(108, 92, 231, 0.4);
+        }
+
+        /* Section Common */
+        .section-header {
+            text-align: center;
+            margin-bottom: 56px;
+        }
+
+        .section-tag {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            letter-spacing: 4px;
+            color: var(--accent-light);
+            display: block;
+            margin-bottom: 12px;
+        }
+
+        .section-title {
+            font-family: var(--font-display);
+            font-size: clamp(1.8rem, 4vw, 2.8rem);
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .section-desc {
+            color: var(--text-dim);
+            font-size: 1.05rem;
+            max-width: 560px;
+            margin: 0 auto;
+        }
+
+        /* Features Section */
+        .features-section {
+            padding: 100px 0;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 20px;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            transition: var(--transition);
+        }
+
+        .feature-card:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-2px);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 16px;
+        }
+
+        .feature-card h3 {
+            font-family: var(--font-display);
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .feature-card p {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            line-height: 1.7;
+        }
+
+        /* Tech Stack Section */
+        .tech-section {
+            padding: 100px 0;
+            background: var(--bg-surface);
+        }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 16px;
+        }
+
+        .tech-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            text-align: center;
+            transition: var(--transition);
+        }
+
+        .tech-card:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-4px);
+        }
+
+        .tech-icon {
+            font-size: 2rem;
+            margin-bottom: 12px;
+        }
+
+        .tech-card h3 {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .tech-card p {
+            color: var(--text-dim);
+            font-size: 0.82rem;
+            line-height: 1.6;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            padding: 100px 0;
+            text-align: center;
+        }
+
+        .cta-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 48px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .cta-title {
+            font-family: var(--font-display);
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .cta-desc {
+            color: var(--text-dim);
+            font-size: 1.05rem;
+            margin-bottom: 32px;
+            line-height: 1.7;
+        }
+
+        .cta-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .cta-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--accent);
+            color: #fff;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 100px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: var(--transition);
+        }
+
+        .cta-btn:hover {
+            background: var(--accent-light);
+            transform: translateY(-2px);
+        }
+
+        .cta-btn-secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .cta-btn-secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent-light);
+        }
+
+        /* Footer */
+        .footer {
+            padding: 60px 0 40px;
+            border-top: 1px solid var(--border);
+        }
+
+        .footer-inner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            text-align: center;
+        }
+
+        .footer-brand {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .footer-tagline {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-style: italic;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 24px;
+        }
+
+        .footer-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: var(--transition);
+        }
+
+        .footer-links a:hover { color: var(--accent-light); }
+
+        .footer-copy {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .footer-copy a {
+            color: var(--accent-light);
+            text-decoration: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .hero-stats { gap: 24px; }
+            .features-grid { grid-template-columns: 1fr; }
+            .tech-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        @media (max-width: 480px) {
+            .tech-grid { grid-template-columns: 1fr; }
+            .hero-stats { flex-direction: column; gap: 16px; }
+        }
+
+        /* Animations */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(24px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-inner">
+            <a href="#" class="nav-logo">
+                <span class="logo-icon">◆</span>
+                <span class="logo-text">OPC <span class="accent">Marketplace</span></span>
+            </a>
+            <div class="nav-links">
+                <a href="#features" class="nav-link">功能特点</a>
+                <a href="#tech" class="nav-link">技术栈</a>
+                <a href="#api" class="nav-link">API文档</a>
+                <a href="https://github.com/MoKangMedical/opc-marketplace" class="nav-link nav-github" target="_blank">
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                    GitHub
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-bg">
+            <div class="grid-lines"></div>
+            <div class="glow glow-1"></div>
+            <div class="glow glow-2"></div>
+        </div>
+        <div class="hero-content">
+            <div class="hero-badge">ONE PERSON COMPANY • MARKETPLACE</div>
+            <h1 class="hero-title">
+                <span class="line">连接市场需求</span>
+                <span class="line gradient-text">与OPC供给</span>
+            </h1>
+            <p class="hero-subtitle">
+                专业的双边市场平台，连接有项目需求的企业/个人与优秀的独立创业者。智能匹配算法，让合作更高效。
+            </p>
+            <div class="hero-stats">
+                <div class="stat">
+                    <span class="stat-num">18+</span>
+                    <span class="stat-label">OPC传奇人物</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-num">7</span>
+                    <span class="stat-label">业务模型</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-num">50+</span>
+                    <span class="stat-label">核心洞察</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-num">100%</span>
+                    <span class="stat-label">开源免费</span>
+                </div>
+            </div>
+            <a href="https://github.com/MoKangMedical/opc-marketplace" class="hero-cta" target="_blank">
+                开始使用
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+            </a>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features-section" id="features">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">功能特点</span>
+                <h2 class="section-title">平台核心功能</h2>
+                <p class="section-desc">完整的双边市场平台，覆盖供需对接全流程</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🤖</div>
+                    <h3>智能匹配算法</h3>
+                    <p>多维度智能匹配算法，基于技能、经验、预算、地点等因素，为需求方推荐最合适的供给方。</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">👥</div>
+                    <h3>双边用户系统</h3>
+                    <p>完整的需求方和供给方用户系统，支持资料管理、技能展示、行业专长等功能。</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">📋</div>
+                    <h3>项目管理</h3>
+                    <p>完整的项目生命周期管理，从创建、发布到完成，支持里程碑管理和状态跟踪。</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">💬</div>
+                    <h3>沟通协作</h3>
+                    <p>匹配记录管理、提案系统、状态跟踪，让供需双方高效沟通和协作。</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">⭐</div>
+                    <h3>评价系统</h3>
+                    <p>多维度评价系统，包括总体评分、沟通、质量、及时性等，建立信任机制。</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🔒</div>
+                    <h3>安全可靠</h3>
+                    <p>JWT认证、密码加密、CORS保护、输入验证，企业级安全机制保障平台安全。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tech Stack Section -->
+    <section class="tech-section" id="tech">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">技术栈</span>
+                <h2 class="section-title">现代技术架构</h2>
+                <p class="section-desc">基于FastAPI的异步高性能后端架构</p>
+            </div>
+            <div class="tech-grid">
+                <div class="tech-card fade-in">
+                    <div class="tech-icon">⚡</div>
+                    <h3>FastAPI</h3>
+                    <p>高性能异步Web框架，自动生成OpenAPI文档</p>
+                </div>
+                <div class="tech-card fade-in">
+                    <div class="tech-icon">🗃️</div>
+                    <h3>SQLAlchemy</h3>
+                    <p>异步ORM，支持SQLite和PostgreSQL</p>
+                </div>
+                <div class="tech-card fade-in">
+                    <div class="tech-icon">🔐</div>
+                    <h3>JWT认证</h3>
+                    <p>安全的令牌认证机制，支持刷新令牌</p>
+                </div>
+                <div class="tech-card fade-in">
+                    <div class="tech-icon">📊</div>
+                    <h3>Pydantic</h3>
+                    <p>数据验证和序列化，确保数据质量</p>
+                </div>
+                <div class="tech-card fade-in">
+                    <div class="tech-icon">🔄</div>
+                    <h3>异步架构</h3>
+                    <p>全异步设计，支持高并发处理</p>
+                </div>
+                <div class="tech-card fade-in">
+                    <div class="tech-icon">📖</div>
+                    <h3>OpenAPI</h3>
+                    <p>自动生成API文档，支持Swagger和ReDoc</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section" id="api">
+        <div class="container">
+            <div class="cta-card">
+                <h2 class="cta-title">开始使用OPC Marketplace</h2>
+                <p class="cta-desc">
+                    完整的API文档，详细的部署指南，让您快速上手。支持本地开发、Docker部署和云平台部署。
+                </p>
+                <div class="cta-buttons">
+                    <a href="https://github.com/MoKangMedical/opc-marketplace#readme" class="cta-btn" target="_blank">
+                        查看文档
+                    </a>
+                    <a href="https://github.com/MoKangMedical/opc-marketplace" class="cta-btn cta-btn-secondary" target="_blank">
+                        GitHub仓库
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-inner">
+                <div class="footer-brand">
+                    <span class="logo-icon">◆</span>
+                    <span class="logo-text">OPC <span class="accent">Marketplace</span></span>
+                    <p class="footer-tagline">连接需求与供给，赋能独立创业者</p>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/MoKangMedical/opc-marketplace" target="_blank">GitHub</a>
+                    <a href="https://github.com/MoKangMedical/opc-legends" target="_blank">OPC Legends</a>
+                    <a href="#features">功能特点</a>
+                    <a href="#tech">技术栈</a>
+                </div>
+                <div class="footer-copy">
+                    <p>开源项目，基于MIT协议。欢迎贡献代码和反馈建议。</p>
+                    <p class="footer-year">© 2026 OPC Marketplace</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Scroll animations
+        function initScrollObserver() {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.1 });
+            
+            document.querySelectorAll('.feature-card, .tech-card').forEach(el => {
+                el.classList.add('fade-in');
+                observer.observe(el);
+            });
+        }
+
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(a => {
+            a.addEventListener('click', (e) => {
+                const href = a.getAttribute('href');
+                if (href === '#') return;
+                e.preventDefault();
+                const target = document.querySelector(href);
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+
+        // Initialize
+        initScrollObserver();
+        
+        console.log('🚀 OPC Marketplace 已加载');
+    </script>
+</body>
+</html>
