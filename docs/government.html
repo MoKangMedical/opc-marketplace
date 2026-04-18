@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>揭榜挂帅 - OPC Marketplace</title>
+    <meta name="description" content="政府科技创新项目对接平台，让独立创业者也能参与政府项目">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --bg-card: #111118;
+            --bg-card-hover: #16161f;
+            --bg-surface: #0e0e15;
+            --border: #1e1e2e;
+            --border-hover: #2a2a40;
+            --text: #e4e4ef;
+            --text-dim: #8888a0;
+            --text-muted: #55556a;
+            --accent: #e74c3c;
+            --accent-light: #ff6b6b;
+            --accent-glow: rgba(231, 76, 60, 0.15);
+            --gold: #f0c040;
+            --green: #00d68f;
+            --blue: #4ecdc4;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-body: 'Inter', -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --radius: 12px;
+            --radius-lg: 20px;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+        /* Navigation */
+        .nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-inner {
+            max-width: 1200px; margin: 0 auto; padding: 0 24px;
+            height: 64px; display: flex; align-items: center; justify-content: space-between;
+        }
+
+        .nav-logo {
+            display: flex; align-items: center; gap: 10px; text-decoration: none;
+            color: var(--text); font-family: var(--font-display); font-weight: 700; font-size: 1.15rem;
+        }
+
+        .logo-icon { color: var(--accent); font-size: 1.3rem; }
+        .accent { color: var(--accent-light); }
+
+        .nav-links { display: flex; align-items: center; gap: 28px; }
+
+        .nav-link {
+            text-decoration: none; color: var(--text-dim); font-size: 0.9rem;
+            font-weight: 500; transition: var(--transition);
+        }
+
+        .nav-link:hover { color: var(--text); }
+        .nav-link.active { color: var(--accent-light); }
+
+        /* Hero */
+        .hero {
+            min-height: 60vh; display: flex; align-items: center; justify-content: center;
+            position: relative; overflow: hidden; padding: 120px 24px 60px;
+            background: linear-gradient(135deg, var(--bg) 0%, #1a0a0a 100%);
+        }
+
+        .hero-content { text-align: center; max-width: 800px; position: relative; z-index: 1; }
+
+        .hero-badge {
+            display: inline-block; font-family: var(--font-mono); font-size: 0.75rem;
+            letter-spacing: 3px; color: var(--accent-light); background: var(--accent-glow);
+            border: 1px solid rgba(231, 76, 60, 0.2); padding: 8px 20px;
+            border-radius: 100px; margin-bottom: 24px;
+        }
+
+        .hero-title {
+            font-family: var(--font-display); font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 700; line-height: 1.1; margin-bottom: 20px;
+        }
+
+        .hero-title .line { display: block; }
+
+        .gradient-text {
+            background: linear-gradient(135deg, var(--accent-light), var(--gold));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+
+        .hero-subtitle { font-size: 1.1rem; color: var(--text-dim); max-width: 600px; margin: 0 auto 32px; line-height: 1.7; }
+
+        .hero-stats { display: flex; justify-content: center; gap: 48px; margin-bottom: 32px; flex-wrap: wrap; }
+
+        .stat { text-align: center; }
+
+        .stat-num {
+            display: block; font-family: var(--font-display); font-size: 2rem;
+            font-weight: 700; color: var(--accent-light);
+        }
+
+        .stat-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+        /* Filter Section */
+        .filter-section { padding: 60px 0; }
+
+        .filter-bar {
+            display: flex; justify-content: center; gap: 12px; margin-bottom: 48px; flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim);
+            padding: 10px 20px; border-radius: 100px; font-size: 0.9rem; font-weight: 500;
+            cursor: pointer; transition: var(--transition); font-family: var(--font-body);
+        }
+
+        .filter-btn:hover { border-color: var(--accent); color: var(--text); }
+
+        .filter-btn.active {
+            background: var(--accent); border-color: var(--accent); color: #fff;
+        }
+
+        /* Projects Grid */
+        .projects-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 24px;
+        }
+
+        .project-card {
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+            padding: 28px; transition: var(--transition); position: relative; overflow: hidden;
+        }
+
+        .project-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+            background: linear-gradient(90deg, var(--accent), transparent); opacity: 0; transition: var(--transition);
+        }
+
+        .project-card:hover {
+            border-color: var(--border-hover); transform: translateY(-4px);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .project-card:hover::before { opacity: 1; }
+
+        .project-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+
+        .project-badge {
+            font-family: var(--font-mono); font-size: 0.7rem; padding: 4px 10px;
+            border-radius: 100px; background: var(--accent-glow); color: var(--accent-light);
+            border: 1px solid rgba(231, 76, 60, 0.2);
+        }
+
+        .project-title {
+            font-family: var(--font-display); font-size: 1.25rem; font-weight: 600;
+            margin-bottom: 12px; color: var(--text);
+        }
+
+        .project-publisher {
+            font-size: 0.9rem; color: var(--text-dim); margin-bottom: 16px;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        .project-description {
+            font-size: 0.9rem; color: var(--text-dim); line-height: 1.7; margin-bottom: 20px;
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+        }
+
+        .project-meta {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;
+        }
+
+        .meta-item { display: flex; flex-direction: column; gap: 4px; }
+
+        .meta-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .meta-value { font-size: 0.9rem; color: var(--text); font-weight: 500; }
+
+        .meta-value.budget { color: var(--green); }
+        .meta-value.deadline { color: var(--gold); }
+
+        .project-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+
+        .project-tag {
+            font-size: 0.75rem; padding: 4px 10px; border-radius: 100px;
+            background: var(--bg-surface); color: var(--text-dim); border: 1px solid var(--border);
+        }
+
+        .project-actions { display: flex; gap: 12px; }
+
+        .btn {
+            display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px;
+            border-radius: 100px; font-weight: 500; font-size: 0.9rem;
+            text-decoration: none; transition: var(--transition); cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--accent); color: #fff; border: 1px solid var(--accent);
+        }
+
+        .btn-primary:hover { background: var(--accent-light); border-color: var(--accent-light); }
+
+        .btn-secondary {
+            background: transparent; color: var(--text); border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover { border-color: var(--accent); color: var(--accent-light); }
+
+        /* Stats Section */
+        .stats-section { padding: 60px 0; background: var(--bg-surface); }
+
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+            padding: 32px; text-align: center; transition: var(--transition);
+        }
+
+        .stat-card:hover { border-color: var(--border-hover); transform: translateY(-2px); }
+
+        .stat-icon { font-size: 2.5rem; margin-bottom: 16px; }
+
+        .stat-card .stat-num { font-size: 2.5rem; margin-bottom: 8px; }
+
+        .stat-card .stat-label { font-size: 0.9rem; }
+
+        /* CTA Section */
+        .cta-section { padding: 80px 0; text-align: center; }
+
+        .cta-card {
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+            padding: 48px; max-width: 800px; margin: 0 auto; position: relative; overflow: hidden;
+        }
+
+        .cta-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, var(--accent-glow), transparent); pointer-events: none;
+        }
+
+        .cta-title { font-family: var(--font-display); font-size: 2rem; font-weight: 700; margin-bottom: 16px; position: relative; z-index: 1; }
+
+        .cta-desc { color: var(--text-dim); font-size: 1rem; margin-bottom: 32px; line-height: 1.7; position: relative; z-index: 1; }
+
+        .cta-buttons { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; position: relative; z-index: 1; }
+
+        /* Footer */
+        .footer { padding: 40px 0; border-top: 1px solid var(--border); text-align: center; }
+
+        .footer-links { display: flex; justify-content: center; gap: 24px; margin-bottom: 16px; }
+
+        .footer-links a { color: var(--text-dim); text-decoration: none; font-size: 0.9rem; transition: var(--transition); }
+        .footer-links a:hover { color: var(--accent-light); }
+
+        .footer-copy { color: var(--text-muted); font-size: 0.8rem; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .hero-stats { gap: 24px; }
+            .projects-grid { grid-template-columns: 1fr; }
+            .filter-bar { gap: 8px; }
+            .filter-btn { padding: 8px 16px; font-size: 0.85rem; }
+        }
+
+        /* Animations */
+        .fade-in { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+        .fade-in.visible { opacity: 1; transform: translateY(0); }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-inner">
+            <a href="https://mokangmedical.github.io/opc-platform/" class="nav-logo">
+                <span class="logo-icon">🏛️</span>
+                <span class="logo-text">揭榜挂帅 <span class="accent">OPC</span></span>
+            </a>
+            <div class="nav-links">
+                <a href="#projects" class="nav-link active">项目列表</a>
+                <a href="#stats" class="nav-link">数据统计</a>
+                <a href="https://mokangmedical.github.io/opc-platform/" class="nav-link">OPC Platform</a>
+                <a href="https://github.com/MoKangMedical/opc-marketplace" class="nav-link" target="_blank">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-badge">政府项目 • 科技创新 • 揭榜挂帅</div>
+            <h1 class="hero-title">
+                <span class="line">政府科技创新项目</span>
+                <span class="line gradient-text">揭榜挂帅对接平台</span>
+            </h1>
+            <p class="hero-subtitle">连接政府科技创新需求与独立创业者，让每个有能力的团队都能参与政府项目，推动技术攻关和产业升级。</p>
+            <div class="hero-stats">
+                <div class="stat"><span class="stat-num" id="totalProjects">12</span><span class="stat-label">项目总数</span></div>
+                <div class="stat"><span class="stat-num" id="totalBudget">4000万</span><span class="stat-label">总预算</span></div>
+                <div class="stat"><span class="stat-num" id="totalIndustries">9</span><span class="stat-label">行业覆盖</span></div>
+                <div class="stat"><span class="stat-num" id="totalPublishers">7</span><span class="stat-label">发布方</span></div>
+            </div>
+            <a href="#projects" class="btn btn-primary">浏览项目</a>
+        </div>
+    </section>
+
+    <!-- Filter Section -->
+    <section class="filter-section" id="projects">
+        <div class="container">
+            <div class="filter-bar">
+                <button class="filter-btn active" data-filter="all">全部项目</button>
+                <button class="filter-btn" data-filter="新能源">新能源</button>
+                <button class="filter-btn" data-filter="交通">交通</button>
+                <button class="filter-btn" data-filter="农业">农业</button>
+                <button class="filter-btn" data-filter="纺织服装">纺织服装</button>
+                <button class="filter-btn" data-filter="煤炭">煤炭</button>
+                <button class="filter-btn" data-filter="文化传媒">文化传媒</button>
+                <button class="filter-btn" data-filter="建筑工程">建筑工程</button>
+            </div>
+            
+            <div class="projects-grid" id="projectsGrid">
+                <!-- 项目卡片将通过JavaScript动态生成 -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats-section" id="stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-card fade-in">
+                    <div class="stat-icon">🏭</div>
+                    <div class="stat-num">7</div>
+                    <div class="stat-label">省属企业</div>
+                </div>
+                <div class="stat-card fade-in">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-num">9</div>
+                    <div class="stat-label">行业领域</div>
+                </div>
+                <div class="stat-card fade-in">
+                    <div class="stat-icon">🤖</div>
+                    <div class="stat-num">100%</div>
+                    <div class="stat-label">AI相关</div>
+                </div>
+                <div class="stat-card fade-in">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-num">4000万</div>
+                    <div class="stat-label">总预算</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <div class="cta-card">
+                <h2 class="cta-title">参与政府科技创新项目</h2>
+                <p class="cta-desc">无论你是独立创业者、小型团队还是科研机构，都可以在这里找到适合的政府项目机会。揭榜挂帅，让创新无界限！</p>
+                <div class="cta-buttons">
+                    <a href="https://github.com/MoKangMedical/opc-marketplace" class="btn btn-primary" target="_blank">查看源码</a>
+                    <a href="https://mokangmedical.github.io/opc-platform/" class="btn btn-secondary">返回OPC Platform</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-links">
+                <a href="https://mokangmedical.github.io/opc-platform/" target="_blank">OPC Platform</a>
+                <a href="https://mokangmedical.github.io/opc-legends/" target="_blank">OPC Legends</a>
+                <a href="https://github.com/MoKangMedical" target="_blank">GitHub</a>
+            </div>
+            <p class="footer-copy">© 2026 OPC Marketplace - 揭榜挂帅政府项目对接平台</p>
+        </div>
+    </footer>
+
+    <script>
+        // 项目数据
+        const projects = [
+            {
+                id: 1,
+                title: "海上风电场智能运维系统",
+                publisher: "江苏省国信集团有限公司",
+                industry: "新能源",
+                budgetMin: 200,
+                budgetMax: 300,
+                deadline: "2026-03-28",
+                description: "融合人工智能技术，在海上风电项目中搭建智能运维系统，实现风机状态实时评估、远程运维、无人巡检、故障预测维护。",
+                tags: ["海上风电", "智能运维", "无人巡检"],
+                contact: "叶兴沛 18251862103",
+                featured: true
+            },
+            {
+                id: 2,
+                title: "高速公路智慧化综合管理平台",
+                publisher: "江苏交通控股有限公司",
+                industry: "交通",
+                budgetMin: 500,
+                budgetMax: 1000,
+                deadline: "2026-05-15",
+                description: "高速公路全路段智慧化改造，包括智慧收费、智慧监控、智慧服务区、车路协同、应急指挥调度。",
+                tags: ["智慧高速", "车路协同", "智能监控"],
+                featured: true
+            },
+            {
+                id: 3,
+                title: "媒体产业全链路智能协同平台",
+                publisher: "江苏省广播电视集团有限公司",
+                industry: "文化传媒",
+                budgetMin: 100,
+                budgetMax: 200,
+                deadline: "2026-04-25",
+                description: "媒体内容生产全流程智能化平台，包括智能选题、内容生成、智能审核、智能分发、效果分析。",
+                tags: ["媒体智能化", "内容生产", "AIGC"],
+                featured: true
+            },
+            {
+                id: 4,
+                title: "AI驱动的纺织设计系统",
+                publisher: "江苏省苏豪控股集团有限公司",
+                industry: "纺织服装",
+                budgetMin: 80,
+                budgetMax: 150,
+                deadline: "2026-05-30",
+                description: "利用AI技术辅助纺织品设计，包括图案智能生成、色彩搭配推荐、款式设计辅助、面料仿真预览。",
+                tags: ["纺织设计", "AI生成", "创意设计"],
+                featured: false
+            },
+            {
+                id: 5,
+                title: "智能验布与面料缺陷检测系统",
+                publisher: "江苏省苏豪控股集团有限公司",
+                industry: "纺织服装",
+                budgetMin: 50,
+                budgetMax: 100,
+                deadline: "2026-04-20",
+                description: "基于计算机视觉的智能验布系统，自动检测面料缺陷，提高质检效率和准确性。",
+                tags: ["面料检测", "缺陷识别", "智能质检"],
+                featured: false
+            },
+            {
+                id: 6,
+                title: "智慧农业无人机巡检平台",
+                publisher: "江苏省农垦集团有限公司",
+                industry: "农业",
+                budgetMin: 100,
+                budgetMax: 200,
+                deadline: "2026-06-10",
+                description: "农业无人机巡检及数据分析平台，包括作物监测、病虫害识别、产量预测、农事决策。",
+                tags: ["智慧农业", "无人机", "精准农业"],
+                featured: true
+            },
+            {
+                id: 7,
+                title: "煤矿智能洗选质量控制系统",
+                publisher: "徐州矿务集团有限公司",
+                industry: "煤炭",
+                budgetMin: 200,
+                budgetMax: 400,
+                deadline: "2026-06-25",
+                description: "煤炭洗选工艺智能化控制系统，实现原煤检测、工艺优化、质量监控、能耗管理。",
+                tags: ["煤炭洗选", "智能优化", "质量提升"],
+                featured: false
+            },
+            {
+                id: 8,
+                title: "旧房改造AI协同设计平台",
+                publisher: "中国江苏国际经济技术合作集团有限公司",
+                industry: "建筑工程",
+                budgetMin: 100,
+                budgetMax: 200,
+                deadline: "2026-07-08",
+                description: "旧房改造AI协同设计平台，包括结构评估、方案生成、BIM建模、施工管理、成本估算。",
+                tags: ["旧房改造", "智能建筑", "城市更新"],
+                featured: false
+            },
+            {
+                id: 9,
+                title: "燃气轮机智能运维系统",
+                publisher: "江苏省国信集团有限公司",
+                industry: "能源",
+                budgetMin: 300,
+                budgetMax: 500,
+                deadline: "2026-04-30",
+                description: "300MW级燃气轮机发电机组智能运维系统，实现设备监测、故障预警、预测性维护。",
+                tags: ["燃气轮机", "智能运维", "故障预警"],
+                featured: false
+            },
+            {
+                id: 10,
+                title: "智慧高速出行服务APP",
+                publisher: "江苏交通控股有限公司",
+                industry: "交通",
+                budgetMin: 200,
+                budgetMax: 400,
+                deadline: "2026-07-20",
+                description: "基于AI的个性化出行服务系统，包括路线规划、路况预测、服务区推荐、无感支付。",
+                tags: ["出行服务", "个性化推荐", "智慧高速"],
+                featured: false
+            },
+            {
+                id: 11,
+                title: "安全生产智能管控平台",
+                publisher: "江苏省苏豪控股集团有限公司",
+                industry: "安全生产",
+                budgetMin: 150,
+                budgetMax: 250,
+                deadline: "2026-05-18",
+                description: "企业安全生产智能管控平台，包括视频AI监测、隐患排查、风险预警、应急指挥。",
+                tags: ["安全生产", "风险管控", "隐患排查"],
+                featured: false
+            },
+            {
+                id: 12,
+                title: "煤矿大数据智能决策系统",
+                publisher: "徐州矿务集团有限公司",
+                industry: "煤炭",
+                budgetMin: 150,
+                budgetMax: 300,
+                deadline: "2026-08-01",
+                description: "煤矿大数据智能决策支持系统，包括生产调度、安全评估、设备管理、成本分析。",
+                tags: ["煤矿大数据", "智能决策", "安全生产"],
+                featured: false
+            }
+        ];
+
+        // 计算剩余天数
+        function getDaysLeft(deadline) {
+            const now = new Date();
+            const end = new Date(deadline);
+            const diff = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+            if (diff < 0) return ' <span style="color: #ff4444;">(已截止)</span>';
+            if (diff <= 7) return ` <span style="color: #ffaa00;">(还剩${diff}天)</span>`;
+            if (diff <= 30) return ` <span style="color: #00d68f;">(还剩${diff}天)</span>`;
+            return '';
+        }
+
+        // 渲染项目卡片
+        function renderProjects(filter = 'all') {
+            const grid = document.getElementById('projectsGrid');
+            const filtered = filter === 'all' ? projects : projects.filter(p => p.industry === filter);
+            
+            grid.innerHTML = filtered.map(project => `
+                <div class="project-card fade-in" data-id="${project.id}">
+                    <div class="project-header">
+                        <span class="project-badge">${project.publisher.split('有限公司')[0]}</span>
+                        ${project.featured ? '<span class="project-badge" style="background: var(--gold); color: #000;">精选</span>' : ''}
+                    </div>
+                    <h3 class="project-title">${project.title}</h3>
+                    <div class="project-publisher">🏢 ${project.publisher}</div>
+                    <p class="project-description">${project.description}</p>
+                    <div class="project-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">预算范围</span>
+                            <span class="meta-value budget">¥${project.budgetMin}万 - ¥${project.budgetMax}万</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">申报截止</span>
+                            <span class="meta-value deadline">${project.deadline}${getDaysLeft(project.deadline)}</span>
+                        </div>
+                    </div>
+                    <div class="project-tags">
+                        ${project.tags.map(tag => `<span class="project-tag">${tag}</span>`).join('')}
+                    </div>
+                    <div class="project-actions">
+                        <a href="#" class="btn btn-primary">查看详情</a>
+                        <a href="#" class="btn btn-secondary">立即申报</a>
+                    </div>
+                </div>
+            `).join('');
+
+            // 触发动画
+            setTimeout(() => {
+                grid.querySelectorAll('.fade-in').forEach((el, i) => {
+                    setTimeout(() => el.classList.add('visible'), i * 100);
+                });
+            }, 100);
+        }
+
+        // 筛选功能
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderProjects(btn.dataset.filter);
+            });
+        });
+
+        // 滚动动画
+        function initScrollObserver() {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.1 });
+            
+            document.querySelectorAll('.stat-card').forEach(el => {
+                el.classList.add('fade-in');
+                observer.observe(el);
+            });
+        }
+
+        // 平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(a => {
+            a.addEventListener('click', (e) => {
+                const href = a.getAttribute('href');
+                if (href === '#') return;
+                e.preventDefault();
+                const target = document.querySelector(href);
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+
+        // 初始化
+        renderProjects();
+        initScrollObserver();
+        
+        console.log('🏛️ 揭榜挂帅平台已加载 - 共' + projects.length + '个项目');
+    </script>
+</body>
+</html>
