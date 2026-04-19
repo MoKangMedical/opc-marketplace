@@ -1,351 +1,266 @@
-"""
-OPC Marketplace - 揭榜挂帅项目API
-政府科技创新项目对接
-"""
+"""揭榜挂帅 - 政府项目API"""
 
-from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, func, or_
+from pydantic import BaseModel
+from typing import Optional, List
 from datetime import datetime
 
 from app.core.database import get_db
-from app.core.security import get_current_user
-from app.models.user import User, ProviderProfile
-from app.models.government import GovernmentProject, ProjectApplication, IndustryCategory
-from app.schemas.government import (
-    GovernmentProjectCreate, GovernmentProjectUpdate, GovernmentProjectResponse,
-    ProjectApplicationCreate, ProjectApplicationUpdate, ProjectApplicationResponse,
-    IndustryCategoryResponse, ProjectSearch, ProjectStats
-)
+from app.models.models import GovProject, GovProjectApplication, User, GovProjectStatus
 
 router = APIRouter()
 
-@router.get("/", response_model=List[GovernmentProjectResponse])
-async def list_government_projects(
-    industry: Optional[str] = Query(None, description="行业领域"),
-    region: Optional[str] = Query(None, description="地区"),
-    publisher_type: Optional[str] = Query(None, description="发榜级别"),
-    status_filter: Optional[str] = Query(None, description="项目状态"),
-    min_budget: Optional[float] = Query(None, description="最低预算"),
-    max_budget: Optional[float] = Query(None, description="最高预算"),
-    search: Optional[str] = Query(None, description="搜索关键词"),
-    is_featured: Optional[bool] = Query(None, description="是否精选"),
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """
-    获取政府揭榜挂帅项目列表
-    
-    支持按行业、地区、级别、预算等条件筛选
-    """
-    query_builder = select(GovernmentProject).where(
-        GovernmentProject.status.in_(["PUBLISHED", "APPLICATION_OPEN"])
-    )
+
+class GovProjectResponse(BaseModel):
+    id: int
+    title: str
+    description: str
+    publisher: str
+    publisher_contact: str
+    industry: str
+    tags: List[str]
+    budget_min: int
+    budget_max: int
+    deadline: Optional[str]
+    tech_requirements: Optional[str]
+    required_skills: List[str]
+    status: str
+    is_featured: bool
+    view_count: int
+    application_count: int
+    created_at: str
+    days_left: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/", response_model=List[GovProjectResponse])
+async def list_gov_projects(
+    industry: Optional[str] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    budget_min: Optional[int] = None,
+    sort: str = "deadline",
+    limit: int = 20,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+):
+    """获取揭榜挂帅项目列表"""
+    query = select(GovProject)
     
     if industry:
-        query_builder = query_builder.where(GovernmentProject.industry == industry)
-    
-    if region:
-        query_builder = query_builder.where(GovernmentProject.region == region)
-    
-    if publisher_type:
-        query_builder = query_builder.where(GovernmentProject.publisher_type == publisher_type)
-    
-    if status_filter:
-        query_builder = query_builder.where(GovernmentProject.status == status_filter)
-    
-    if min_budget is not None:
-        query_builder = query_builder.where(GovernmentProject.budget_max >= min_budget)
-    
-    if max_budget is not None:
-        query_builder = query_builder.where(GovernmentProject.budget_min <= max_budget)
-    
+        query = query.where(GovProject.industry == industry)
+    if status:
+        query = query.where(GovProject.status == status)
+    if budget_min:
+        query = query.where(GovProject.budget_max >= budget_min)
     if search:
-        query_builder = query_builder.where(
+        query = query.where(
             or_(
-                GovernmentProject.title.ilike(f"%{search}%"),
-                GovernmentProject.description.ilike(f"%{search}%"),
-                GovernmentProject.publisher_name.ilike(f"%{search}%")
+                GovProject.title.contains(search),
+                GovProject.description.contains(search),
+                GovProject.publisher.contains(search),
             )
         )
     
-    if is_featured is not None:
-        query_builder = query_builder.where(GovernmentProject.is_featured == is_featured)
+    # 排序
+    if sort == "deadline":
+        query = query.order_by(GovProject.deadline.asc())
+    elif sort == "budget":
+        query = query.order_by(GovProject.budget_max.desc())
+    elif sort == "newest":
+        query = query.order_by(GovProject.created_at.desc())
     
-    # 按发布时间倒序
-    query_builder = query_builder.order_by(GovernmentProject.publish_date.desc())
-    
-    # 分页
-    offset = (page - 1) * page_size
-    query_builder = query_builder.offset(offset).limit(page_size)
-    
-    result = await db.execute(query_builder)
+    query = query.offset(offset).limit(limit)
+    result = await db.execute(query)
     projects = result.scalars().all()
     
-    return projects
+    now = datetime.utcnow()
+    response = []
+    for p in projects:
+        days_left = None
+        if p.deadline:
+            delta = p.deadline - now
+            days_left = delta.days
+        
+        response.append(GovProjectResponse(
+            id=p.id,
+            title=p.title,
+            description=p.description,
+            publisher=p.publisher,
+            publisher_contact=p.publisher_contact,
+            industry=p.industry,
+            tags=p.tags or [],
+            budget_min=p.budget_min,
+            budget_max=p.budget_max,
+            deadline=p.deadline.isoformat() if p.deadline else None,
+            tech_requirements=p.tech_requirements,
+            required_skills=p.required_skills or [],
+            status=p.status.value,
+            is_featured=p.is_featured,
+            view_count=p.view_count,
+            application_count=p.application_count,
+            created_at=p.created_at.isoformat(),
+            days_left=days_left,
+        ))
+    
+    return response
 
-@router.get("/featured", response_model=List[GovernmentProjectResponse])
-async def get_featured_projects(
-    limit: int = Query(6, ge=1, le=20, description="返回数量"),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """获取精选揭榜挂帅项目"""
-    result = await db.execute(
-        select(GovernmentProject)
-        .where(
-            GovernmentProject.is_featured == True,
-            GovernmentProject.status.in_(["PUBLISHED", "APPLICATION_OPEN"])
-        )
-        .order_by(GovernmentProject.publish_date.desc())
-        .limit(limit)
+
+@router.get("/stats")
+async def gov_project_stats(db: AsyncSession = Depends(get_db)):
+    """揭榜挂帅统计数据"""
+    total = await db.execute(select(func.count(GovProject.id)))
+    total_count = total.scalar()
+    
+    budget_sum = await db.execute(select(func.sum(GovProject.budget_max)))
+    total_budget = budget_sum.scalar() or 0
+    
+    industries = await db.execute(
+        select(GovProject.industry, func.count(GovProject.id))
+        .group_by(GovProject.industry)
     )
-    projects = result.scalars().all()
-    return projects
-
-@router.get("/industries", response_model=List[IndustryCategoryResponse])
-async def list_industries(
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """获取行业分类列表"""
-    result = await db.execute(
-        select(IndustryCategory)
-        .where(IndustryCategory.is_active == True)
-        .order_by(IndustryCategory.sort_order)
+    
+    publishers = await db.execute(
+        select(func.count(GovProject.publisher.distinct()))
     )
-    industries = result.scalars().all()
-    return industries
+    
+    now = datetime.utcnow()
+    deadline_result = await db.execute(
+        select(GovProject).where(GovProject.deadline != None)
+    )
+    all_projects = deadline_result.scalars().all()
+    
+    recruiting = sum(1 for p in all_projects if p.deadline and p.deadline > now)
+    expired = sum(1 for p in all_projects if p.deadline and p.deadline <= now)
+    
+    return {
+        "total_projects": total_count,
+        "total_budget": f"{total_budget // 1000}万" if total_budget >= 1000 else f"{total_budget}万",
+        "total_budget_raw": total_budget,
+        "industries_count": len(industries.all()),
+        "publishers_count": publishers.scalar(),
+        "recruiting": recruiting,
+        "expired": expired,
+        "by_industry": {row[0]: row[1] for row in industries.all()},
+    }
 
-@router.get("/{project_id}", response_model=GovernmentProjectResponse)
-async def get_project(
-    project_id: str,
-    db: AsyncSession = Depends(get_db)
-) -> Any:
+
+@router.get("/{project_id}")
+async def get_gov_project(project_id: int, db: AsyncSession = Depends(get_db)):
     """获取揭榜挂帅项目详情"""
-    result = await db.execute(
-        select(GovernmentProject)
-        .where(GovernmentProject.id == project_id)
-    )
-    project = result.scalar_one_or_none()
-    
+    project = await db.get(GovProject, project_id)
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
+        raise HTTPException(status_code=404, detail="项目不存在")
     
-    # 增加浏览次数
+    # 增加浏览量
     project.view_count += 1
     await db.commit()
     
-    return project
-
-@router.post("/{project_id}/apply", response_model=ProjectApplicationResponse)
-async def apply_project(
-    project_id: str,
-    application_data: ProjectApplicationCreate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """
-    申请揭榜挂帅项目
+    now = datetime.utcnow()
+    days_left = (project.deadline - now).days if project.deadline else None
     
-    - **team_name**: 申报团队名称
-    - **team_introduction**: 团队介绍
-    - **technical_capability**: 技术能力说明
-    - **project_plan**: 项目实施方案
-    """
-    # 检查项目是否存在
-    result = await db.execute(
-        select(GovernmentProject).where(GovernmentProject.id == project_id)
-    )
-    project = result.scalar_one_or_none()
-    
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
-    
-    # 检查申报是否截止
-    if project.application_deadline < datetime.now():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="申报已截止"
-        )
-    
-    # 检查是否已申请
-    result = await db.execute(
-        select(ProjectApplication)
-        .where(
-            ProjectApplication.project_id == project_id,
-            ProjectApplication.applicant_id == current_user.id
+    # 获取申请列表
+    apps_result = await db.execute(
+        select(GovProjectApplication).where(
+            GovProjectApplication.project_id == project_id
         )
     )
-    existing_application = result.scalar_one_or_none()
-    
-    if existing_application:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="已申请过此项目"
-        )
-    
-    # 创建申请
-    application = ProjectApplication(
-        project_id=project_id,
-        applicant_id=current_user.id,
-        **application_data.dict()
-    )
-    db.add(application)
-    
-    # 更新项目申请数量
-    project.application_count += 1
-    
-    await db.commit()
-    await db.refresh(application)
-    
-    return application
-
-@router.get("/{project_id}/applications", response_model=List[ProjectApplicationResponse])
-async def get_project_applications(
-    project_id: str,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """获取项目的申请列表（仅限项目发布方）"""
-    # 这里简化处理，实际应该检查用户是否是项目发布方
-    result = await db.execute(
-        select(ProjectApplication)
-        .where(ProjectApplication.project_id == project_id)
-        .order_by(ProjectApplication.created_at.desc())
-    )
-    applications = result.scalars().all()
-    return applications
-
-@router.get("/my/applications", response_model=List[ProjectApplicationResponse])
-async def get_my_applications(
-    status_filter: Optional[str] = Query(None, description="申请状态"),
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """获取我的申请列表"""
-    query_builder = select(ProjectApplication).where(
-        ProjectApplication.applicant_id == current_user.id
-    )
-    
-    if status_filter:
-        query_builder = query_builder.where(ProjectApplication.status == status_filter)
-    
-    query_builder = query_builder.order_by(ProjectApplication.created_at.desc())
-    
-    offset = (page - 1) * page_size
-    query_builder = query_builder.offset(offset).limit(page_size)
-    
-    result = await db.execute(query_builder)
-    applications = result.scalars().all()
-    
-    return applications
-
-@router.get("/stats/overview", response_model=ProjectStats)
-async def get_project_stats(
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """获取揭榜挂帅项目统计信息"""
-    # 总项目数
-    result = await db.execute(
-        select(func.count(GovernmentProject.id))
-    )
-    total_projects = result.scalar()
-    
-    # 开放申报项目数
-    result = await db.execute(
-        select(func.count(GovernmentProject.id))
-        .where(GovernmentProject.status == "APPLICATION_OPEN")
-    )
-    open_projects = result.scalar()
-    
-    # 总预算金额
-    result = await db.execute(
-        select(func.sum(GovernmentProject.budget_max))
-        .where(GovernmentProject.status.in_(["PUBLISHED", "APPLICATION_OPEN"]))
-    )
-    total_budget = result.scalar() or 0
-    
-    # 总申请数
-    result = await db.execute(
-        select(func.count(ProjectApplication.id))
-    )
-    total_applications = result.scalar()
-    
-    # 行业分布
-    result = await db.execute(
-        select(
-            GovernmentProject.industry,
-            func.count(GovernmentProject.id).label("count")
-        )
-        .group_by(GovernmentProject.industry)
-        .order_by(func.count(GovernmentProject.id).desc())
-        .limit(10)
-    )
-    industry_distribution = [
-        {"industry": row[0], "count": row[1]} 
-        for row in result.fetchall()
-    ]
+    applications = apps_result.scalars().all()
     
     return {
-        "total_projects": total_projects,
-        "open_projects": open_projects,
-        "total_budget": float(total_budget),
-        "total_applications": total_applications,
-        "industry_distribution": industry_distribution
+        "id": project.id,
+        "title": project.title,
+        "description": project.description,
+        "publisher": project.publisher,
+        "publisher_contact": project.publisher_contact,
+        "industry": project.industry,
+        "tags": project.tags or [],
+        "budget_min": project.budget_min,
+        "budget_max": project.budget_max,
+        "deadline": project.deadline.isoformat() if project.deadline else None,
+        "days_left": days_left,
+        "deadline_status": "已截止" if days_left and days_left < 0 else (
+            f"还剩{days_left}天" if days_left and days_left <= 30 else None
+        ),
+        "tech_requirements": project.tech_requirements,
+        "required_skills": project.required_skills or [],
+        "status": project.status.value,
+        "is_featured": project.is_featured,
+        "view_count": project.view_count,
+        "application_count": project.application_count,
+        "applications_summary": [
+            {
+                "id": a.id,
+                "team_name": a.team_name,
+                "status": a.status,
+                "score": a.score,
+            }
+            for a in applications
+        ],
+        "created_at": project.created_at.isoformat(),
+        "updated_at": project.updated_at.isoformat() if project.updated_at else None,
     }
 
-# 以下端点需要管理员权限
 
-@router.post("/", response_model=GovernmentProjectResponse)
-async def create_project(
-    project_data: GovernmentProjectCreate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """创建揭榜挂帅项目（管理员权限）"""
-    # 这里应该检查管理员权限
-    # 简化处理：暂时允许所有用户创建
-    
-    project = GovernmentProject(**project_data.dict())
-    db.add(project)
-    await db.commit()
-    await db.refresh(project)
-    
-    return project
-
-@router.put("/{project_id}", response_model=GovernmentProjectResponse)
-async def update_project(
-    project_id: str,
-    project_data: GovernmentProjectUpdate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """更新揭榜挂帅项目（管理员权限）"""
-    result = await db.execute(
-        select(GovernmentProject).where(GovernmentProject.id == project_id)
-    )
-    project = result.scalar_one_or_none()
-    
+@router.post("/{project_id}/apply")
+async def apply_gov_project(
+    project_id: int,
+    applicant_id: int,
+    team_name: str,
+    proposal: str,
+    proposed_budget: int,
+    tech_approach: str = "",
+    db: AsyncSession = Depends(get_db),
+):
+    """申报揭榜挂帅项目"""
+    project = await db.get(GovProject, project_id)
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
+        raise HTTPException(status_code=404, detail="项目不存在")
+    
+    now = datetime.utcnow()
+    if project.deadline and project.deadline < now:
+        raise HTTPException(status_code=400, detail="项目申报已截止")
+    
+    # 检查是否重复申报
+    existing = await db.execute(
+        select(GovProjectApplication).where(
+            GovProjectApplication.project_id == project_id,
+            GovProjectApplication.applicant_id == applicant_id,
         )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="您已申报过此项目")
     
-    for field, value in project_data.dict(exclude_unset=True).items():
-        setattr(project, field, value)
-    
+    application = GovProjectApplication(
+        project_id=project_id,
+        applicant_id=applicant_id,
+        team_name=team_name,
+        proposal=proposal,
+        proposed_budget=proposed_budget,
+        tech_approach=tech_approach,
+        status="submitted",
+    )
+    db.add(application)
+    project.application_count += 1
     await db.commit()
-    await db.refresh(project)
     
-    return project
+    return {
+        "message": "申报成功",
+        "application_id": application.id,
+        "project_title": project.title,
+        "deadline": project.deadline.isoformat() if project.deadline else None,
+    }
+
+
+@router.get("/industries/list")
+async def list_industries(db: AsyncSession = Depends(get_db)):
+    """获取所有行业分类"""
+    result = await db.execute(
+        select(GovProject.industry, func.count(GovProject.id))
+        .group_by(GovProject.industry)
+    )
+    return {row[0]: row[1] for row in result.all()}

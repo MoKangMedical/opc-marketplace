@@ -1,542 +1,266 @@
-"""
-OPC Marketplace - 项目路由
-"""
+"""项目管理API"""
 
-from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func
-from sqlalchemy.orm import selectinload
-from datetime import datetime, timedelta
+from sqlalchemy import select, func, or_
+from pydantic import BaseModel
+from typing import Optional, List
+from datetime import datetime
 
 from app.core.database import get_db
-from app.core.security import get_current_user, require_client, require_provider
-from app.models.user import User, ClientProfile, ProviderProfile
-from app.models.project import (
-    Project, ProjectMilestone, Match, Proposal, Skill, ProviderSkill
-)
-from app.schemas.project import (
-    ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse,
-    ProjectMilestoneCreate, ProjectMilestoneUpdate, ProjectMilestoneResponse,
-    ProjectSearch, ProjectStats
-)
+from app.models.models import Project, ProjectApplication, User, ProjectStatus
 
 router = APIRouter()
 
-@router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
-async def create_project(
-    project_data: ProjectCreate,
-    current_user: User = Depends(require_client),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """
-    创建新项目（仅限需求方）
+
+class ProjectCreate(BaseModel):
+    title: str
+    description: str
+    category: str
+    industry: str
+    demander_id: int
+    budget_min: int
+    budget_max: int
+    deadline: Optional[str] = None
+    required_skills: List[str] = []
+    is_urgent: bool = False
+
+
+class ProjectResponse(BaseModel):
+    id: int
+    title: str
+    description: str
+    category: str
+    industry: str
+    demander_id: int
+    demander_name: Optional[str] = None
+    demander_company: Optional[str] = None
+    supplier_id: Optional[int] = None
+    budget_min: int
+    budget_max: int
+    deadline: Optional[str] = None
+    required_skills: List[str]
+    status: str
+    is_urgent: bool
+    is_featured: bool
+    view_count: int
+    application_count: int
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/", response_model=List[ProjectResponse])
+async def list_projects(
+    category: Optional[str] = None,
+    industry: Optional[str] = None,
+    status: Optional[str] = None,
+    is_urgent: Optional[bool] = None,
+    budget_min: Optional[int] = None,
+    budget_max: Optional[int] = None,
+    search: Optional[str] = None,
+    sort: str = "newest",
+    limit: int = 20,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+):
+    """获取项目列表，支持多维度筛选"""
+    query = select(Project)
     
-    - **title**: 项目标题
-    - **description**: 项目描述
-    - **project_type**: 项目类型
-    - **budget_type**: 预算类型
-    - **budget_min**: 最小预算
-    - **budget_max**: 最大预算
-    - **required_skills**: 所需技能ID列表
-    """
-    # 获取需求方资料
-    result = await db.execute(
-        select(ClientProfile).where(ClientProfile.user_id == current_user.id)
-    )
-    client_profile = result.scalar_one_or_none()
-    
-    if not client_profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="需求方资料不存在"
+    if category:
+        query = query.where(Project.category == category)
+    if industry:
+        query = query.where(Project.industry == industry)
+    if status:
+        query = query.where(Project.status == status)
+    if is_urgent is not None:
+        query = query.where(Project.is_urgent == is_urgent)
+    if budget_min:
+        query = query.where(Project.budget_max >= budget_min)
+    if budget_max:
+        query = query.where(Project.budget_min <= budget_max)
+    if search:
+        query = query.where(
+            or_(
+                Project.title.contains(search),
+                Project.description.contains(search),
+            )
         )
     
-    # 创建项目
+    # 排序
+    if sort == "newest":
+        query = query.order_by(Project.created_at.desc())
+    elif sort == "budget_high":
+        query = query.order_by(Project.budget_max.desc())
+    elif sort == "budget_low":
+        query = query.order_by(Project.budget_min.asc())
+    elif sort == "deadline":
+        query = query.order_by(Project.deadline.asc())
+    
+    query = query.offset(offset).limit(limit)
+    result = await db.execute(query)
+    projects = result.scalars().all()
+    
+    # 获取需求方信息
+    response = []
+    for p in projects:
+        demander = await db.get(User, p.demander_id) if p.demander_id else None
+        response.append(ProjectResponse(
+            id=p.id,
+            title=p.title,
+            description=p.description,
+            category=p.category,
+            industry=p.industry,
+            demander_id=p.demander_id,
+            demander_name=demander.display_name if demander else None,
+            demander_company=demander.company if demander else None,
+            supplier_id=p.supplier_id,
+            budget_min=p.budget_min,
+            budget_max=p.budget_max,
+            deadline=p.deadline.isoformat() if p.deadline else None,
+            required_skills=p.required_skills or [],
+            status=p.status.value,
+            is_urgent=p.is_urgent,
+            is_featured=p.is_featured,
+            view_count=p.view_count,
+            application_count=p.application_count,
+            created_at=p.created_at.isoformat(),
+        ))
+    
+    return response
+
+
+@router.get("/stats")
+async def project_stats(db: AsyncSession = Depends(get_db)):
+    """项目统计数据"""
+    total = await db.execute(select(func.count(Project.id)))
+    total_count = total.scalar()
+    
+    open_count = await db.execute(
+        select(func.count(Project.id)).where(Project.status == ProjectStatus.OPEN)
+    )
+    
+    budget_sum = await db.execute(select(func.sum(Project.budget_max)))
+    total_budget = budget_sum.scalar() or 0
+    
+    industries = await db.execute(
+        select(Project.industry, func.count(Project.id))
+        .group_by(Project.industry)
+    )
+    
+    return {
+        "total_projects": total_count,
+        "open_projects": open_count.scalar(),
+        "total_budget": total_budget,
+        "industries": {row[0]: row[1] for row in industries.all()},
+    }
+
+
+@router.get("/{project_id}")
+async def get_project(project_id: int, db: AsyncSession = Depends(get_db)):
+    """获取项目详情"""
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    
+    # 增加浏览量
+    project.view_count += 1
+    await db.commit()
+    
+    demander = await db.get(User, project.demander_id) if project.demander_id else None
+    supplier = await db.get(User, project.supplier_id) if project.supplier_id else None
+    
+    return {
+        "id": project.id,
+        "title": project.title,
+        "description": project.description,
+        "category": project.category,
+        "industry": project.industry,
+        "demander": {
+            "id": demander.id,
+            "name": demander.display_name,
+            "company": demander.company,
+            "rating": demander.rating,
+        } if demander else None,
+        "supplier": {
+            "id": supplier.id,
+            "name": supplier.display_name,
+            "company": supplier.company,
+        } if supplier else None,
+        "budget_min": project.budget_min,
+        "budget_max": project.budget_max,
+        "deadline": project.deadline.isoformat() if project.deadline else None,
+        "required_skills": project.required_skills or [],
+        "status": project.status.value,
+        "is_urgent": project.is_urgent,
+        "is_featured": project.is_featured,
+        "view_count": project.view_count,
+        "application_count": project.application_count,
+        "created_at": project.created_at.isoformat(),
+    }
+
+
+@router.post("/", response_model=ProjectResponse)
+async def create_project(data: ProjectCreate, db: AsyncSession = Depends(get_db)):
+    """发布新项目"""
     project = Project(
-        client_id=client_profile.id,
-        **project_data.dict()
+        title=data.title,
+        description=data.description,
+        category=data.category,
+        industry=data.industry,
+        demander_id=data.demander_id,
+        budget_min=data.budget_min,
+        budget_max=data.budget_max,
+        deadline=datetime.fromisoformat(data.deadline) if data.deadline else None,
+        required_skills=data.required_skills,
+        is_urgent=data.is_urgent,
     )
     db.add(project)
     await db.commit()
     await db.refresh(project)
     
-    # 加载关联数据
-    result = await db.execute(
-        select(Project)
-        .options(selectinload(Project.client))
-        .where(Project.id == project.id)
+    return ProjectResponse(
+        id=project.id,
+        title=project.title,
+        description=project.description,
+        category=project.category,
+        industry=project.industry,
+        demander_id=project.demander_id,
+        budget_min=project.budget_min,
+        budget_max=project.budget_max,
+        deadline=project.deadline.isoformat() if project.deadline else None,
+        required_skills=project.required_skills or [],
+        status=project.status.value,
+        is_urgent=project.is_urgent,
+        is_featured=project.is_featured,
+        view_count=0,
+        application_count=0,
+        created_at=project.created_at.isoformat(),
     )
-    project = result.scalar_one()
-    
-    return project
 
-@router.get("/", response_model=ProjectListResponse)
-async def list_projects(
-    project_type: Optional[str] = Query(None, description="项目类型"),
-    status_filter: Optional[str] = Query(None, description="项目状态"),
-    min_budget: Optional[float] = Query(None, description="最小预算"),
-    max_budget: Optional[float] = Query(None, description="最大预算"),
-    skill_ids: Optional[List[str]] = Query(None, description="技能ID列表"),
-    location_preference: Optional[str] = Query(None, description="地点偏好"),
-    is_urgent: Optional[bool] = Query(None, description="是否紧急"),
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """
-    获取项目列表
-    
-    支持按类型、状态、预算、技能等条件筛选
-    """
-    # 构建查询
-    query_builder = select(Project).where(Project.status.in_(["OPEN", "IN_PROGRESS"]))
-    
-    # 类型过滤
-    if project_type:
-        query_builder = query_builder.where(Project.project_type == project_type)
-    
-    # 状态过滤
-    if status_filter:
-        query_builder = query_builder.where(Project.status == status_filter)
-    
-    # 预算过滤
-    if min_budget is not None:
-        query_builder = query_builder.where(Project.budget_max >= min_budget)
-    
-    if max_budget is not None:
-        query_builder = query_builder.where(Project.budget_min <= max_budget)
-    
-    # 技能过滤
-    if skill_ids:
-        # 这里需要JSON查询，SQLite可能不支持，PostgreSQL支持
-        # 简化处理：检查required_skills是否包含任一指定技能
-        pass
-    
-    # 地点偏好过滤
-    if location_preference:
-        query_builder = query_builder.where(
-            or_(
-                Project.location_preference == location_preference,
-                Project.location_preference == "ANY"
-            )
-        )
-    
-    # 紧急项目过滤
-    if is_urgent is not None:
-        query_builder = query_builder.where(Project.is_urgent == is_urgent)
-    
-    # 按创建时间倒序
-    query_builder = query_builder.order_by(Project.created_at.desc())
-    
-    # 计算总数
-    count_result = await db.execute(query_builder)
-    total = len(count_result.scalars().all())
-    
-    # 分页
-    offset = (page - 1) * page_size
-    query_builder = query_builder.offset(offset).limit(page_size)
-    
-    # 执行查询
-    result = await db.execute(query_builder)
-    projects = result.scalars().all()
-    
-    # 加载关联数据
-    project_ids = [p.id for p in projects]
-    if project_ids:
-        result = await db.execute(
-            select(Project)
-            .options(selectinload(Project.client))
-            .where(Project.id.in_(project_ids))
-            .order_by(Project.created_at.desc())
-        )
-        projects = result.scalars().all()
-    
-    return {
-        "projects": projects,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size
-    }
 
-@router.get("/my-projects", response_model=ProjectListResponse)
-async def get_my_projects(
-    status_filter: Optional[str] = Query(None, description="项目状态"),
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    current_user: User = Depends(require_client),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """获取当前用户发布的项目（仅限需求方）"""
-    # 获取需求方资料
-    result = await db.execute(
-        select(ClientProfile).where(ClientProfile.user_id == current_user.id)
-    )
-    client_profile = result.scalar_one_or_none()
-    
-    if not client_profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="需求方资料不存在"
-        )
-    
-    # 构建查询
-    query_builder = select(Project).where(Project.client_id == client_profile.id)
-    
-    # 状态过滤
-    if status_filter:
-        query_builder = query_builder.where(Project.status == status_filter)
-    
-    # 按创建时间倒序
-    query_builder = query_builder.order_by(Project.created_at.desc())
-    
-    # 计算总数
-    count_result = await db.execute(query_builder)
-    total = len(count_result.scalars().all())
-    
-    # 分页
-    offset = (page - 1) * page_size
-    query_builder = query_builder.offset(offset).limit(page_size)
-    
-    # 执行查询
-    result = await db.execute(query_builder)
-    projects = result.scalars().all()
-    
-    return {
-        "projects": projects,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size
-    }
-
-@router.get("/{project_id}", response_model=ProjectResponse)
-async def get_project(
-    project_id: str,
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """获取项目详情"""
-    result = await db.execute(
-        select(Project)
-        .options(
-            selectinload(Project.client),
-            selectinload(Project.milestones),
-            selectinload(Project.matches).selectinload(Match.provider),
-            selectinload(Project.proposals).selectinload(Proposal.provider)
-        )
-        .where(Project.id == project_id)
-    )
-    project = result.scalar_one_or_none()
-    
+@router.post("/{project_id}/apply")
+async def apply_project(
+    project_id: int,
+    applicant_id: int,
+    proposal: str,
+    proposed_budget: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """申请承接项目"""
+    project = await db.get(Project, project_id)
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
+        raise HTTPException(status_code=404, detail="项目不存在")
     
-    return project
-
-@router.put("/{project_id}", response_model=ProjectResponse)
-async def update_project(
-    project_id: str,
-    project_data: ProjectUpdate,
-    current_user: User = Depends(require_client),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """更新项目（仅限项目发布者）"""
-    # 获取项目
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
-    
-    # 检查权限
-    result = await db.execute(
-        select(ClientProfile).where(ClientProfile.user_id == current_user.id)
-    )
-    client_profile = result.scalar_one_or_none()
-    
-    if not client_profile or project.client_id != client_profile.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权修改此项目"
-        )
-    
-    # 更新项目
-    for field, value in project_data.dict(exclude_unset=True).items():
-        setattr(project, field, value)
-    
-    await db.commit()
-    await db.refresh(project)
-    
-    return project
-
-@router.delete("/{project_id}")
-async def delete_project(
-    project_id: str,
-    current_user: User = Depends(require_client),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """删除项目（仅限项目发布者）"""
-    # 获取项目
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
-    
-    # 检查权限
-    result = await db.execute(
-        select(ClientProfile).where(ClientProfile.user_id == current_user.id)
-    )
-    client_profile = result.scalar_one_or_none()
-    
-    if not client_profile or project.client_id != client_profile.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权刪除此项目"
-        )
-    
-    # 只能删除草稿状态的项目
-    if project.status != "DRAFT":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="只能删除草稿状态的项目"
-        )
-    
-    # 删除项目
-    await db.delete(project)
-    await db.commit()
-    
-    return {"message": "项目已删除"}
-
-@router.post("/{project_id}/publish")
-async def publish_project(
-    project_id: str,
-    current_user: User = Depends(require_client),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """发布项目（将草稿状态改为开放状态）"""
-    # 获取项目
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
-    
-    # 检查权限
-    result = await db.execute(
-        select(ClientProfile).where(ClientProfile.user_id == current_user.id)
-    )
-    client_profile = result.scalar_one_or_none()
-    
-    if not client_profile or project.client_id != client_profile.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权发布此项目"
-        )
-    
-    # 只能发布草稿状态的项目
-    if project.status != "DRAFT":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="只能发布草稿状态的项目"
-        )
-    
-    # 发布项目
-    project.status = "OPEN"
-    await db.commit()
-    
-    return {"message": "项目已发布"}
-
-@router.post("/{project_id}/milestones", response_model=ProjectMilestoneResponse)
-async def add_project_milestone(
-    project_id: str,
-    milestone_data: ProjectMilestoneCreate,
-    current_user: User = Depends(require_client),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """添加项目里程碑"""
-    # 获取项目
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
-    
-    # 检查权限
-    result = await db.execute(
-        select(ClientProfile).where(ClientProfile.user_id == current_user.id)
-    )
-    client_profile = result.scalar_one_or_none()
-    
-    if not client_profile or project.client_id != client_profile.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权添加里程碑"
-        )
-    
-    # 创建里程碑
-    milestone = ProjectMilestone(
+    application = ProjectApplication(
         project_id=project_id,
-        **milestone_data.dict()
+        applicant_id=applicant_id,
+        proposal=proposal,
+        proposed_budget=proposed_budget,
     )
-    db.add(milestone)
+    db.add(application)
+    project.application_count += 1
     await db.commit()
-    await db.refresh(milestone)
     
-    return milestone
-
-@router.get("/{project_id}/matches", response_model=List[dict])
-async def get_project_matches(
-    project_id: str,
-    current_user: User = Depends(require_client),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """获取项目的匹配推荐"""
-    # 获取项目
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
-    
-    # 检查权限
-    result = await db.execute(
-        select(ClientProfile).where(ClientProfile.user_id == current_user.id)
-    )
-    client_profile = result.scalar_one_or_none()
-    
-    if not client_profile or project.client_id != client_profile.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权查看匹配推荐"
-        )
-    
-    # 获取匹配的供给方
-    # 这里简化处理，实际应该使用匹配算法
-    result = await db.execute(
-        select(ProviderProfile)
-        .options(selectinload(ProviderProfile.skills).selectinload(ProviderSkill.skill))
-        .where(ProviderProfile.availability == "AVAILABLE")
-        .limit(10)
-    )
-    providers = result.scalars().all()
-    
-    # 构建匹配结果
-    matches = []
-    for provider in providers:
-        # 计算简单的匹配分数
-        match_score = calculate_simple_match_score(project, provider)
-        
-        matches.append({
-            "provider_id": str(provider.id),
-            "provider_name": provider.user.full_name if provider.user else "未知",
-            "professional_title": provider.professional_title,
-            "hourly_rate": float(provider.hourly_rate),
-            "match_score": match_score,
-            "skills": [ps.skill.name for ps in provider.skills] if provider.skills else []
-        })
-    
-    # 按匹配分数排序
-    matches.sort(key=lambda x: x["match_score"], reverse=True)
-    
-    return matches
-
-def calculate_simple_match_score(project: Project, provider: ProviderProfile) -> float:
-    """计算简单的匹配分数"""
-    score = 0.0
-    
-    # 预算匹配（30%）
-    if project.budget_min and project.budget_max and provider.hourly_rate:
-        # 假设项目预算是小时费率的100倍
-        estimated_hours = project.budget_max / provider.hourly_rate if provider.hourly_rate > 0 else 0
-        if 20 <= estimated_hours <= 200:  # 合理的工时范围
-            score += 30
-    
-    # 技能匹配（40%）
-    if project.required_skills and provider.skills:
-        project_skills = set(project.required_skills)
-        provider_skills = set(str(ps.skill_id) for ps in provider.skills)
-        skill_match_ratio = len(project_skills.intersection(provider_skills)) / len(project_skills) if project_skills else 0
-        score += skill_match_ratio * 40
-    
-    # 经验匹配（20%）
-    if project.preferred_experience and provider.years_of_experience:
-        experience_map = {"JUNIOR": 1, "MID": 3, "SENIOR": 5, "EXPERT": 8}
-        required_exp = experience_map.get(project.preferred_experience, 0)
-        if provider.years_of_experience >= required_exp:
-            score += 20
-    
-    # 可用性（10%）
-    if provider.availability == "AVAILABLE":
-        score += 10
-    
-    return min(score, 100.0)
-
-@router.get("/stats/overview", response_model=ProjectStats)
-async def get_project_stats(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """获取项目统计信息"""
-    # 总项目数
-    result = await db.execute(select(func.count(Project.id)))
-    total_projects = result.scalar()
-    
-    # 开放项目数
-    result = await db.execute(
-        select(func.count(Project.id)).where(Project.status == "OPEN")
-    )
-    open_projects = result.scalar()
-    
-    # 进行中项目数
-    result = await db.execute(
-        select(func.count(Project.id)).where(Project.status == "IN_PROGRESS")
-    )
-    in_progress_projects = result.scalar()
-    
-    # 已完成项目数
-    result = await db.execute(
-        select(func.count(Project.id)).where(Project.status == "COMPLETED")
-    )
-    completed_projects = result.scalar()
-    
-    # 总预算金额
-    result = await db.execute(
-        select(func.sum(Project.budget_max)).where(Project.status.in_(["OPEN", "IN_PROGRESS"]))
-    )
-    total_budget = result.scalar() or 0
-    
-    # 平均项目预算
-    result = await db.execute(
-        select(func.avg((Project.budget_min + Project.budget_max) / 2))
-        .where(Project.status.in_(["OPEN", "IN_PROGRESS"]))
-    )
-    average_budget = result.scalar() or 0
-    
-    return {
-        "total_projects": total_projects,
-        "open_projects": open_projects,
-        "in_progress_projects": in_progress_projects,
-        "completed_projects": completed_projects,
-        "total_budget": float(total_budget),
-        "average_budget": float(average_budget)
-    }
+    return {"message": "申请成功", "application_id": application.id}

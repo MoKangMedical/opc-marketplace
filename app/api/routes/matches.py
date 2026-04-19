@@ -1,474 +1,192 @@
-"""
-OPC Marketplace - 匹配路由
-"""
+"""智能匹配API - 多维度供需匹配"""
 
-from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func
-from sqlalchemy.orm import selectinload
-from datetime import datetime
+from sqlalchemy import select
+from typing import List, Optional
+import json
 
 from app.core.database import get_db
-from app.core.security import get_current_user, require_client, require_provider
-from app.models.user import User, ClientProfile, ProviderProfile, ProviderSkill
-from app.models.project import Project, Match, Proposal, Skill
-from app.schemas.project import (
-    MatchCreate, MatchUpdate, MatchResponse, MatchListResponse,
-    ProposalCreate, ProposalUpdate, ProposalResponse, ProposalListResponse
-)
-from app.services.matching import MatchingService
+from app.models.models import User, Project, Match, MatchStatus
 
 router = APIRouter()
 
-@router.post("/", response_model=MatchResponse, status_code=status.HTTP_201_CREATED)
-async def create_match(
-    match_data: MatchCreate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """
-    创建匹配记录
+
+def calculate_match_score(user: User, project: Project) -> dict:
+    """计算用户与项目的匹配度（多维度）"""
     
-    - **project_id**: 项目ID
-    - **provider_id**: 供给方ID
-    - **match_score**: 匹配分数（0-100）
-    - **match_reasons**: 匹配原因
-    """
-    # 检查项目是否存在
-    result = await db.execute(select(Project).where(Project.id == match_data.project_id))
-    project = result.scalar_one_or_none()
+    # 1. 技能匹配 (35%)
+    user_skills = set(user.skills or [])
+    required_skills = set(project.required_skills or [])
+    if required_skills:
+        skill_overlap = len(user_skills & required_skills)
+        skill_score = skill_overlap / len(required_skills)
+    else:
+        skill_score = 0.5
     
+    # 2. 行业匹配 (25%)
+    user_industries = set(user.industries or [])
+    if project.industry:
+        industry_score = 1.0 if project.industry in user_industries else 0.3
+    else:
+        industry_score = 0.5
+    
+    # 3. 地区匹配 (15%)
+    if user.location and project.location_preference:
+        location_score = 1.0 if user.location == project.location_preference else 0.5
+    else:
+        location_score = 0.7
+    
+    # 4. 信誉评分 (15%)
+    reputation_score = user.rating / 5.0
+    
+    # 5. 经验丰富度 (10%)
+    experience_score = min(user.rating_count / 20, 1.0)
+    
+    # 综合评分
+    total_score = (
+        skill_score * 0.35 +
+        industry_score * 0.25 +
+        location_score * 0.15 +
+        reputation_score * 0.15 +
+        experience_score * 0.10
+    )
+    
+    # 匹配原因
+    reasons = []
+    if skill_score > 0.7:
+        matched = user_skills & required_skills
+        reasons.append(f"技能高度匹配：{', '.join(matched)}")
+    if industry_score > 0.8:
+        reasons.append(f"行业经验匹配：{project.industry}")
+    if reputation_score > 0.9:
+        reasons.append(f"信誉评分优秀：{user.rating}/5.0")
+    
+    return {
+        "skill_score": round(skill_score, 2),
+        "industry_score": round(industry_score, 2),
+        "location_score": round(location_score, 2),
+        "reputation_score": round(reputation_score, 2),
+        "experience_score": round(experience_score, 2),
+        "total_score": round(total_score, 2),
+        "reasons": reasons,
+    }
+
+
+@router.get("/project/{project_id}")
+async def match_project(
+    project_id: int,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db),
+):
+    """为项目匹配最佳供给方"""
+    project = await db.get(Project, project_id)
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
+        raise HTTPException(status_code=404, detail="项目不存在")
     
-    # 检查供给方是否存在
-    result = await db.execute(select(ProviderProfile).where(ProviderProfile.id == match_data.provider_id))
-    provider = result.scalar_one_or_none()
-    
-    if not provider:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="供给方不存在"
-        )
-    
-    # 检查是否已存在匹配
+    # 获取所有供给方
     result = await db.execute(
-        select(Match)
-        .where(
-            Match.project_id == match_data.project_id,
-            Match.provider_id == match_data.provider_id
+        select(User).where(
+            User.is_active == True,
+            User.role.in_(["supplier", "both"]),
         )
     )
-    existing_match = result.scalar_one_or_none()
+    suppliers = result.scalars().all()
     
-    if existing_match:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="匹配记录已存在"
-        )
+    # 计算匹配度
+    matches = []
+    for supplier in suppliers:
+        score_info = calculate_match_score(supplier, project)
+        matches.append({
+            "user_id": supplier.id,
+            "username": supplier.username,
+            "display_name": supplier.display_name,
+            "company": supplier.company,
+            "skills": supplier.skills or [],
+            "location": supplier.location,
+            "rating": supplier.rating,
+            "rating_count": supplier.rating_count,
+            "match_scores": score_info,
+        })
     
-    # 创建匹配记录
-    match = Match(**match_data.dict())
+    # 按综合评分排序
+    matches.sort(key=lambda x: x["match_scores"]["total_score"], reverse=True)
+    
+    return {
+        "project_id": project_id,
+        "project_title": project.title,
+        "total_suppliers": len(suppliers),
+        "top_matches": matches[:limit],
+    }
+
+
+@router.get("/user/{user_id}")
+async def match_user(
+    user_id: int,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db),
+):
+    """为用户匹配最佳项目"""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    # 获取所有开放项目
+    result = await db.execute(
+        select(Project).where(Project.status == "open")
+    )
+    projects = result.scalars().all()
+    
+    matches = []
+    for project in projects:
+        score_info = calculate_match_score(user, project)
+        matches.append({
+            "project_id": project.id,
+            "title": project.title,
+            "industry": project.industry,
+            "budget_min": project.budget_min,
+            "budget_max": project.budget_max,
+            "required_skills": project.required_skills or [],
+            "match_scores": score_info,
+        })
+    
+    matches.sort(key=lambda x: x["match_scores"]["total_score"], reverse=True)
+    
+    return {
+        "user_id": user_id,
+        "user_name": user.display_name,
+        "total_projects": len(projects),
+        "top_matches": matches[:limit],
+    }
+
+
+@router.post("/record")
+async def record_match(
+    project_id: int,
+    supplier_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """记录匹配结果"""
+    project = await db.get(Project, project_id)
+    supplier = await db.get(User, supplier_id)
+    
+    if not project or not supplier:
+        raise HTTPException(status_code=404, detail="项目或用户不存在")
+    
+    score_info = calculate_match_score(supplier, project)
+    
+    match = Match(
+        project_id=project_id,
+        supplier_id=supplier_id,
+        skill_score=score_info["skill_score"],
+        experience_score=score_info["experience_score"],
+        budget_score=score_info.get("budget_score", 0.5),
+        location_score=score_info["location_score"],
+        availability_score=score_info.get("availability_score", 0.5),
+        total_score=score_info["total_score"],
+        match_reasons=score_info["reasons"],
+    )
     db.add(match)
     await db.commit()
-    await db.refresh(match)
     
-    # 加载关联数据
-    result = await db.execute(
-        select(Match)
-        .options(
-            selectinload(Match.project),
-            selectinload(Match.provider).selectinload(ProviderProfile.user)
-        )
-        .where(Match.id == match.id)
-    )
-    match = result.scalar_one()
-    
-    return match
-
-@router.get("/", response_model=MatchListResponse)
-async def list_matches(
-    project_id: Optional[str] = Query(None, description="项目ID"),
-    provider_id: Optional[str] = Query(None, description="供给方ID"),
-    status_filter: Optional[str] = Query(None, description="匹配状态"),
-    min_score: Optional[float] = Query(None, description="最小匹配分数"),
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """
-    获取匹配记录列表
-    
-    支持按项目、供给方、状态、分数等条件筛选
-    """
-    # 构建查询
-    query_builder = select(Match)
-    
-    # 项目过滤
-    if project_id:
-        query_builder = query_builder.where(Match.project_id == project_id)
-    
-    # 供给方过滤
-    if provider_id:
-        query_builder = query_builder.where(Match.provider_id == provider_id)
-    
-    # 状态过滤
-    if status_filter:
-        query_builder = query_builder.where(Match.status == status_filter)
-    
-    # 分数过滤
-    if min_score is not None:
-        query_builder = query_builder.where(Match.match_score >= min_score)
-    
-    # 按匹配分数倒序
-    query_builder = query_builder.order_by(Match.match_score.desc())
-    
-    # 计算总数
-    count_result = await db.execute(query_builder)
-    total = len(count_result.scalars().all())
-    
-    # 分页
-    offset = (page - 1) * page_size
-    query_builder = query_builder.offset(offset).limit(page_size)
-    
-    # 执行查询
-    result = await db.execute(query_builder)
-    matches = result.scalars().all()
-    
-    # 加载关联数据
-    match_ids = [m.id for m in matches]
-    if match_ids:
-        result = await db.execute(
-            select(Match)
-            .options(
-                selectinload(Match.project),
-                selectinload(Match.provider).selectinload(ProviderProfile.user)
-            )
-            .where(Match.id.in_(match_ids))
-            .order_by(Match.match_score.desc())
-        )
-        matches = result.scalars().all()
-    
-    return {
-        "matches": matches,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size
-    }
-
-@router.get("/my-matches", response_model=MatchListResponse)
-async def get_my_matches(
-    status_filter: Optional[str] = Query(None, description="匹配状态"),
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    current_user: User = Depends(require_provider),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """获取当前供给方的匹配记录"""
-    # 获取供给方资料
-    result = await db.execute(
-        select(ProviderProfile).where(ProviderProfile.user_id == current_user.id)
-    )
-    provider_profile = result.scalar_one_or_none()
-    
-    if not provider_profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="供给方资料不存在"
-        )
-    
-    # 构建查询
-    query_builder = select(Match).where(Match.provider_id == provider_profile.id)
-    
-    # 状态过滤
-    if status_filter:
-        query_builder = query_builder.where(Match.status == status_filter)
-    
-    # 按创建时间倒序
-    query_builder = query_builder.order_by(Match.created_at.desc())
-    
-    # 计算总数
-    count_result = await db.execute(query_builder)
-    total = len(count_result.scalars().all())
-    
-    # 分页
-    offset = (page - 1) * page_size
-    query_builder = query_builder.offset(offset).limit(page_size)
-    
-    # 执行查询
-    result = await db.execute(query_builder)
-    matches = result.scalars().all()
-    
-    # 加载关联数据
-    match_ids = [m.id for m in matches]
-    if match_ids:
-        result = await db.execute(
-            select(Match)
-            .options(selectinload(Match.project))
-            .where(Match.id.in_(match_ids))
-            .order_by(Match.created_at.desc())
-        )
-        matches = result.scalars().all()
-    
-    return {
-        "matches": matches,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size
-    }
-
-@router.get("/{match_id}", response_model=MatchResponse)
-async def get_match(
-    match_id: str,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """获取匹配记录详情"""
-    result = await db.execute(
-        select(Match)
-        .options(
-            selectinload(Match.project),
-            selectinload(Match.provider).selectinload(ProviderProfile.user),
-            selectinload(Match.proposal)
-        )
-        .where(Match.id == match_id)
-    )
-    match = result.scalar_one_or_none()
-    
-    if not match:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="匹配记录不存在"
-        )
-    
-    return match
-
-@router.put("/{match_id}", response_model=MatchResponse)
-async def update_match(
-    match_id: str,
-    match_data: MatchUpdate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """更新匹配记录"""
-    # 获取匹配记录
-    result = await db.execute(select(Match).where(Match.id == match_id))
-    match = result.scalar_one_or_none()
-    
-    if not match:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="匹配记录不存在"
-        )
-    
-    # 检查权限
-    # 这里简化处理，实际应该检查用户是否是项目发布者或匹配的供给方
-    
-    # 更新匹配记录
-    for field, value in match_data.dict(exclude_unset=True).items():
-        setattr(match, field, value)
-    
-    await db.commit()
-    await db.refresh(match)
-    
-    return match
-
-@router.post("/{match_id}/accept")
-async def accept_match(
-    match_id: str,
-    current_user: User = Depends(require_provider),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """接受匹配（仅限供给方）"""
-    # 获取匹配记录
-    result = await db.execute(select(Match).where(Match.id == match_id))
-    match = result.scalar_one_or_none()
-    
-    if not match:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="匹配记录不存在"
-        )
-    
-    # 获取供给方资料
-    result = await db.execute(
-        select(ProviderProfile).where(ProviderProfile.user_id == current_user.id)
-    )
-    provider_profile = result.scalar_one_or_none()
-    
-    if not provider_profile or match.provider_id != provider_profile.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权操作此匹配记录"
-        )
-    
-    # 更新匹配状态
-    match.status = "ACCEPTED"
-    await db.commit()
-    
-    return {"message": "匹配已接受"}
-
-@router.post("/{match_id}/reject")
-async def reject_match(
-    match_id: str,
-    current_user: User = Depends(require_provider),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """拒绝匹配（仅限供给方）"""
-    # 获取匹配记录
-    result = await db.execute(select(Match).where(Match.id == match_id))
-    match = result.scalar_one_or_none()
-    
-    if not match:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="匹配记录不存在"
-        )
-    
-    # 获取供给方资料
-    result = await db.execute(
-        select(ProviderProfile).where(ProviderProfile.user_id == current_user.id)
-    )
-    provider_profile = result.scalar_one_or_none()
-    
-    if not provider_profile or match.provider_id != provider_profile.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权操作此匹配记录"
-        )
-    
-    # 更新匹配状态
-    match.status = "REJECTED"
-    await db.commit()
-    
-    return {"message": "匹配已拒绝"}
-
-@router.post("/{match_id}/proposal", response_model=ProposalResponse)
-async def create_proposal(
-    match_id: str,
-    proposal_data: ProposalCreate,
-    current_user: User = Depends(require_provider),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """创建提案（仅限供给方）"""
-    # 获取匹配记录
-    result = await db.execute(select(Match).where(Match.id == match_id))
-    match = result.scalar_one_or_none()
-    
-    if not match:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="匹配记录不存在"
-        )
-    
-    # 获取供给方资料
-    result = await db.execute(
-        select(ProviderProfile).where(ProviderProfile.user_id == current_user.id)
-    )
-    provider_profile = result.scalar_one_or_none()
-    
-    if not provider_profile or match.provider_id != provider_profile.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权操作此匹配记录"
-        )
-    
-    # 检查是否已存在提案
-    if match.proposal:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="已存在提案"
-        )
-    
-    # 创建提案
-    proposal = Proposal(
-        match_id=match_id,
-        provider_id=provider_profile.id,
-        project_id=match.project_id,
-        **proposal_data.dict()
-    )
-    db.add(proposal)
-    
-    # 更新匹配状态
-    match.status = "PROPOSED"
-    
-    await db.commit()
-    await db.refresh(proposal)
-    
-    return proposal
-
-@router.post("/auto-match/{project_id}", response_model=List[dict])
-async def auto_match_project(
-    project_id: str,
-    current_user: User = Depends(require_client),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """自动匹配项目（仅限需求方）"""
-    # 获取项目
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="项目不存在"
-        )
-    
-    # 检查权限
-    result = await db.execute(
-        select(ClientProfile).where(ClientProfile.user_id == current_user.id)
-    )
-    client_profile = result.scalar_one_or_none()
-    
-    if not client_profile or project.client_id != client_profile.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权操作此项目"
-        )
-    
-    # 使用匹配服务进行自动匹配
-    matching_service = MatchingService(db)
-    matches = await matching_service.auto_match_project(project)
-    
-    return matches
-
-@router.get("/stats/overview")
-async def get_match_stats(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-) -> Any:
-    """获取匹配统计信息"""
-    # 总匹配数
-    result = await db.execute(select(func.count(Match.id)))
-    total_matches = result.scalar()
-    
-    # 已接受匹配数
-    result = await db.execute(
-        select(func.count(Match.id)).where(Match.status == "ACCEPTED")
-    )
-    accepted_matches = result.scalar()
-    
-    # 待处理匹配数
-    result = await db.execute(
-        select(func.count(Match.id)).where(Match.status.in_(["SUGGESTED", "VIEWED", "INTERESTED"]))
-    )
-    pending_matches = result.scalar()
-    
-    # 平均匹配分数
-    result = await db.execute(select(func.avg(Match.match_score)))
-    average_score = result.scalar() or 0
-    
-    return {
-        "total_matches": total_matches,
-        "accepted_matches": accepted_matches,
-        "pending_matches": pending_matches,
-        "average_score": float(average_score),
-        "acceptance_rate": (accepted_matches / total_matches * 100) if total_matches > 0 else 0
-    }
+    return {"message": "匹配记录已保存", "match_id": match.id, "score": score_info["total_score"]}
