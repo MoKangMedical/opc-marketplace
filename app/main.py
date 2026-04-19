@@ -12,7 +12,7 @@ import uvicorn
 import os
 
 from app.core.database import init_db, get_db
-from app.api.routes import users, projects, matches, government, messages, reviews
+from app.api.routes import users, projects, matches, government, messages, reviews, a2a
 
 
 @asynccontextmanager
@@ -52,6 +52,7 @@ app.include_router(matches.router, prefix="/api/v1/matches", tags=["智能匹配
 app.include_router(government.router, prefix="/api/v1/government", tags=["揭榜挂帅"])
 app.include_router(messages.router, prefix="/api/v1/messages", tags=["消息系统"])
 app.include_router(reviews.router, prefix="/api/v1/reviews", tags=["评价系统"])
+app.include_router(a2a.router, tags=["A2A超级个体"])
 
 
 @app.get("/")
