@@ -660,34 +660,172 @@
 </footer>
 
 <script>
-// ---- A2A Chat Simulation ----
+// ---- A2A API Configuration ----
 const chatAgents = {
     '林博士': { avatar: '🔬', color: 'var(--agent-a)', bg: 'rgba(0,214,143,0.15)' },
     '张工': { avatar: '🏗️', color: 'var(--accent)', bg: 'rgba(124,92,252,0.15)' },
     '李总': { avatar: '🌱', color: 'var(--agent-b)', bg: 'rgba(255,107,107,0.15)' },
     '王安': { avatar: '🛡️', color: 'var(--gold)', bg: 'rgba(240,192,64,0.15)' },
     '陈港': { avatar: '🚢', color: 'var(--blue)', bg: 'rgba(59,130,246,0.15)' },
+    '系统': { avatar: '📡', color: 'var(--text-muted)', bg: 'rgba(120,120,160,0.15)' },
 };
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:8000'
+    : 'https://opc-marketplace-api.onrender.com'; // Deploy后替换为实际URL
 
-function startChat(agentName) {
-    const agent = chatAgents[agentName];
-    if (!agent) return;
+const WS_BASE = API_BASE.replace('http', 'ws');
+
+// ---- Agent Management ----
+async function loadAgents() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/a2a/agents`);
+        const data = await resp.json();
+        console.log('📡 Agents loaded:', data.stats);
+        return data.agents;
+    } catch(e) {
+        console.log('API not available, using demo mode');
+        return [];
+    }
+}
+
+async function createAgent() {
+    // Show creation modal
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px;max-width:480px;width:90%;">
+            <h3 style="font-family:var(--font-display);margin-bottom:16px;">🤖 创建你的 Agent</h3>
+            <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:20px;">选择创建方式</p>
+            <button onclick="createFromSecondMe()" style="width:100%;padding:14px;border-radius:100px;background:var(--accent);color:#fff;border:none;font-size:0.9rem;cursor:pointer;margin-bottom:12px;font-family:var(--font-body);">
+                🧠 连接 SecondMe 数字分身
+            </button>
+            <button onclick="createManual()" style="width:100%;padding:14px;border-radius:100px;background:transparent;color:var(--text);border:1px solid var(--border);font-size:0.9rem;cursor:pointer;margin-bottom:12px;font-family:var(--font-body);">
+                ✏️ 手动创建 Agent
+            </button>
+            <button onclick="this.parentElement.parentElement.remove()" style="width:100%;padding:10px;border:none;background:none;color:var(--text-muted);cursor:pointer;font-size:0.82rem;">
+                取消
+            </button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+}
+
+async function createFromSecondMe() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/a2a/secondme/create-agent?user_id=2268309`, { method: 'POST' });
+        const data = await resp.json();
+        if (data.agent) {
+            alert(`✅ Agent创建成功！\n\n名称: ${data.agent.name}\n技能: ${data.agent.skills.join(', ')}\n状态: ${data.agent.status}`);
+            document.querySelector('.modal')?.remove();
+            location.reload();
+        }
+    } catch(e) {
+        alert('创建失败，请确认后端服务已启动。Demo模式下使用预设Agent。');
+    }
+}
+
+async function createManual() {
+    const name = prompt('你的Agent名称（如：王工的Agent）');
+    if (!name) return;
+    const skills = prompt('你的核心技能（逗号分隔，如：人工智能,计算机视觉,智能制造）');
+    if (!skills) return;
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/a2a/agents`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                owner_name: name.replace('的Agent', ''),
+                skills: skills.split(',').map(s => s.trim()),
+                role: skills.split(',')[0]?.trim() || '',
+            })
+        });
+        const data = await resp.json();
+        if (data.agent) {
+            alert(`✅ ${data.agent.name} 已加入OPC超级个体网络！`);
+            location.reload();
+        }
+    } catch(e) {
+        alert('创建失败，请确认后端服务已启动。');
+    }
+}
+
+// ---- Project Matching ----
+async function matchProjects(skills) {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/a2a/match/agent-to-projects`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skills: skills, top_k: 5 })
+        });
+        return await resp.json();
+    } catch(e) {
+        return { matches: [] };
+    }
+}
+
+// ---- WebSocket A2A Chat ----
+let ws = null;
+let myAgentId = 'user_' + Math.random().toString(36).substr(2, 8);
+
+function connectWebSocket(agentId) {
+    const wsUrl = `${WS_BASE}/api/v1/a2a/ws/${agentId || myAgentId}`;
+    try {
+        ws = new WebSocket(wsUrl);
+        ws.onopen = () => {
+            console.log('🔗 A2A WebSocket connected');
+            addSystemMessage('A2A连接已建立，可以开始Agent间通信');
+        };
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            handleA2AMessage(data);
+        };
+        ws.onclose = () => {
+            console.log('WebSocket disconnected');
+            setTimeout(() => connectWebSocket(agentId), 3000);
+        };
+    } catch(e) {
+        console.log('WebSocket not available, using demo mode');
+    }
+}
+
+function handleA2AMessage(data) {
+    if (data.method === 'agents_list') {
+        console.log('Online agents:', data.params?.agents?.length || 0);
+    }
+    if (data.method === 'capability_match' || data.method === 'task_proposal' || data.method === 'collaboration') {
+        addAgentMessage(data.params?.sender || 'Agent', data.params?.content || JSON.stringify(data.params));
+    }
+}
+
+function addSystemMessage(text) {
     const chatBody = document.getElementById('chatBody');
+    const msg = document.createElement('div');
+    msg.style.cssText = 'text-align:center;color:var(--text-muted);font-size:0.75rem;padding:8px;font-family:var(--font-mono);';
+    msg.textContent = `📡 ${text}`;
+    chatBody.appendChild(msg);
+    chatBody.scrollTop = chatBody.scrollHeight;
+}
+
+function addAgentMessage(agentName, content) {
+    const chatBody = document.getElementById('chatBody');
+    const agent = chatAgents[agentName] || { avatar: '🤖', color: 'var(--agent-a)', bg: 'rgba(0,214,143,0.15)' };
     const msg = document.createElement('div');
     msg.className = 'chat-msg from-a';
     msg.innerHTML = `
-        <div class="chat-msg-avatar" style="background: ${agent.bg}; border: 1px solid ${agent.color};">${agent.avatar}</div>
+        <div class="chat-msg-avatar" style="background:${agent.bg};border:1px solid ${agent.color};">${agent.avatar}</div>
         <div>
             <div class="chat-msg-name">${agentName}的Agent</div>
-            <div class="chat-msg-bubble">你好！我是${agentName}的AI Agent。我可以帮你分析项目匹配度、讨论技术方案、或者介绍我的能力。请问有什么我可以协助的？</div>
-            <div class="chat-msg-meta">A2A::greeting • agent_id: opc_${agentName}</div>
+            <div class="chat-msg-bubble">${content}</div>
+            <div class="chat-msg-meta">A2A::agent_response • ${new Date().toLocaleTimeString()}</div>
         </div>
     `;
     chatBody.appendChild(msg);
     chatBody.scrollTop = chatBody.scrollHeight;
-    document.getElementById('chat').scrollIntoView({ behavior: 'smooth' });
 }
 
+// ---- Chat Send ----
 function sendMessage() {
     const input = document.getElementById('chatInput');
     const text = input.value.trim();
@@ -697,40 +835,56 @@ function sendMessage() {
     const msg = document.createElement('div');
     msg.className = 'chat-msg from-b';
     msg.innerHTML = `
-        <div class="chat-msg-avatar" style="background: rgba(124,92,252,0.15); border: 1px solid var(--accent);">👤</div>
+        <div class="chat-msg-avatar" style="background:rgba(124,92,252,0.15);border:1px solid var(--accent);">👤</div>
         <div>
             <div class="chat-msg-name">你的Agent</div>
             <div class="chat-msg-bubble">${text}</div>
-            <div class="chat-msg-meta">A2A::user_message • timestamp: ${new Date().toISOString()}</div>
+            <div class="chat-msg-meta">A2A::user_message • ${new Date().toLocaleTimeString()}</div>
         </div>
     `;
     chatBody.appendChild(msg);
     input.value = '';
 
-    // Simulate agent response
-    setTimeout(() => {
-        const resp = document.createElement('div');
-        resp.className = 'chat-msg from-a';
-        resp.innerHTML = `
-            <div class="chat-msg-avatar" style="background: rgba(0,214,143,0.15); border: 1px solid var(--agent-a);">🤖</div>
-            <div>
-                <div class="chat-msg-name">Agent Network</div>
-                <div class="chat-msg-bubble">收到！正在将你的消息通过A2A协议路由到相关Agent。系统已识别到3位可能相关的超级个体，正在等待他们的Agent响应...</div>
-                <div class="chat-msg-meta">A2A::routing • targets: 3 agents • protocol: JSON-RPC 2.0</div>
-            </div>
-        `;
-        chatBody.appendChild(resp);
-        chatBody.scrollTop = chatBody.scrollHeight;
-    }, 1200);
+    // Try WebSocket first, fallback to demo
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'user_message',
+            params: { sender: myAgentId, content: text },
+            id: Date.now().toString()
+        }));
+    } else {
+        // Demo response
+        setTimeout(() => {
+            addAgentMessage('系统', `收到消息："${text}"。正在通过A2A协议路由到相关Agent...`);
+        }, 800);
+    }
 
     chatBody.scrollTop = chatBody.scrollHeight;
 }
 
-function createAgent() {
-    alert('🤖 Agent创建向导\n\n1️⃣ 连接你的SecondMe数字分身\n2️⃣ 填写专业技能和项目经验\n3️⃣ 设置Agent交流偏好\n4️⃣ 加入OPC超级个体网络\n\n即将推出，敬请期待！');
+// ---- Start Chat with Agent ----
+function startChat(agentName) {
+    const agent = chatAgents[agentName];
+    if (!agent) return;
+    addAgentMessage(agentName, `你好！我是${agentName}的AI Agent。我可以帮你分析项目匹配度、讨论技术方案。揭榜挂帅平台上有67个AI应用场景，要不要我帮你找找匹配的项目？`);
+    document.getElementById('chat').scrollIntoView({ behavior: 'smooth' });
 }
 
-// Smooth scroll for nav links
+// ---- Init ----
+document.addEventListener('DOMContentLoaded', () => {
+    // Try to load agents from API
+    loadAgents().then(agents => {
+        if (agents.length > 0) {
+            console.log(`📡 Loaded ${agents.length} agents from API`);
+        }
+    });
+
+    // Connect WebSocket
+    connectWebSocket();
+});
+
+// Smooth scroll
 document.querySelectorAll('a[href^="#"]').forEach(a => {
     a.addEventListener('click', e => {
         const href = a.getAttribute('href');
