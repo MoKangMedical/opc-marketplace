@@ -6,7 +6,7 @@ uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 
 # HTTP客户端
-httpx==0.25.2
+httpx==0.28.1
 aiohttp==3.9.1
 
 # 数据库
