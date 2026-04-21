@@ -23,7 +23,7 @@ pydantic[email]==2.5.2
 pydantic-settings==2.1.0
 
 # WebSocket
-websockets==12.0
+websockets==16.0
 
 # 工具库
 python-dotenv==1.0.0
