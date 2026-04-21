@@ -1,270 +1,277 @@
-# OPC Marketplace - 供需对接平台
+# opc-marketplace
 
-连接市场需求和OPC（一人公司）供给的双边平台。
+OPC Marketplace - 连接市场需求和OPC供给的双边平台
 
-## 🚀 项目简介
+## 项目简介
 
-OPC Marketplace 是一个专业的双边市场平台，旨在连接有项目需求的企业/个人与优秀的独立创业者（OPC - One Person Company）。
+这是一个医疗AI项目，致力于通过人工智能技术解决医疗健康领域的挑战。
+
+## 功能特性
 
 ### 核心功能
+- 🏥 医疗AI核心功能
+- 🔬 智能诊断与分析
+- 📊 数据可视化与报告
+- 🤖 多模态交互支持
+- 🔒 数据安全与隐私保护
 
-- **智能匹配**：基于技能、经验、预算、地点等多维度智能匹配
-- **项目管理**：完整的项目生命周期管理
-- **用户系统**：需求方和供给方的完整用户系统
-- **沟通协作**：项目沟通、提案和协作功能
-- **评价系统**：项目完成后的评价和反馈
-- **支付管理**：项目支付和里程碑管理
+### 技术特性
+- 🚀 高性能计算
+- 📈 可扩展架构
+- 🔄 实时数据处理
+- 🌐 分布式部署
+- 📱 多平台支持
 
-### 用户类型
+## 技术栈
 
-1. **需求方（Client）**
-   - 发布项目需求
-   - 浏览和筛选供给方
-   - 管理项目进度
-   - 评价合作体验
+### 后端技术
+- **框架**: Python FastAPI, Django, Flask
+- **AI框架**: TensorFlow, PyTorch, Scikit-learn
+- **数据库**: PostgreSQL, MongoDB, Redis
+- **消息队列**: RabbitMQ, Kafka
+- **容器化**: Docker, Kubernetes
 
-2. **供给方（Provider）**
-   - 创建专业资料
-   - 展示技能和经验
-   - 响应项目需求
-   - 提交项目提案
+### 前端技术
+- **框架**: React, Vue.js, Angular
+- **UI库**: Ant Design, Material-UI, Element UI
+- **可视化**: D3.js, ECharts, Plotly
+- **移动端**: React Native, Flutter
 
-## 🛠️ 技术栈
+### 数据处理
+- **分析**: Pandas, NumPy, SciPy
+- **可视化**: Matplotlib, Seaborn, Plotly
+- **大数据**: Spark, Hadoop
+- **流处理**: Flink, Storm
 
-- **后端框架**：FastAPI
-- **数据库**：SQLite (开发) / PostgreSQL (生产)
-- **ORM**：SQLAlchemy (异步)
-- **认证**：JWT + OAuth2
-- **数据验证**：Pydantic
-- **API文档**：OpenAPI / Swagger
-
-## 📦 安装和运行
+## 快速开始
 
 ### 环境要求
 
 - Python 3.9+
-- pip
+- Node.js 16+
+- Docker 20+
+- Git 2.30+
 
 ### 安装步骤
 
-1. **克隆项目**
+1. **克隆仓库**
 ```bash
-cd ~/Desktop/opc-marketplace
+git clone https://github.com/MoKangMedical/opc-marketplace.git
+cd opc-marketplace
 ```
 
-2. **创建虚拟环境**
+2. **后端设置**
 ```bash
+# 创建虚拟环境
 python -m venv venv
-source venv/bin/activate  # macOS/Linux
-# 或
-venv\Scripts\activate  # Windows
-```
+source venv/bin/activate  # Linux/Mac
+# venv\Scripts\activate  # Windows
 
-3. **安装依赖**
-```bash
+# 安装依赖
 pip install -r requirements.txt
-```
 
-4. **配置环境变量**
-```bash
+# 配置环境变量
 cp .env.example .env
-# 编辑 .env 文件，配置你的环境变量
+# 编辑.env文件，配置数据库连接等
 ```
 
-5. **初始化数据库**
+3. **前端设置**
 ```bash
-# 数据库会在首次启动时自动创建
+cd frontend
+npm install
+npm run build
 ```
 
-6. **运行项目**
+4. **数据库设置**
 ```bash
-python -m app.main
+# 初始化数据库
+python manage.py migrate
+python manage.py createsuperuser
 ```
 
-或使用uvicorn：
+5. **启动服务**
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# 使用Docker Compose（推荐）
+docker-compose up -d
+
+# 或手动启动
+python manage.py runserver
 ```
 
-### 访问API
-
-- **API文档**：http://localhost:8000/docs
-- **ReDoc文档**：http://localhost:8000/redoc
-- **API根路径**：http://localhost:8000/api/v1
-
-## 📁 项目结构
+## 项目结构
 
 ```
 opc-marketplace/
-├── app/
-│   ├── api/
-│   │   ├── routes/          # API路由
-│   │   │   ├── auth.py      # 认证路由
-│   │   │   ├── users.py     # 用户路由
-│   │   │   ├── projects.py  # 项目路由
-│   │   │   ├── skills.py    # 技能路由
-│   │   │   ├── matches.py   # 匹配路由
-│   │   │   └── reviews.py   # 评价路由
-│   │   └── __init__.py
-│   ├── core/
-│   │   ├── config.py        # 配置管理
-│   │   ├── database.py      # 数据库配置
-│   │   └── security.py      # 安全认证
-│   ├── models/              # 数据库模型
-│   │   ├── user.py          # 用户模型
-│   │   ├── project.py       # 项目模型
-│   │   └── __init__.py
-│   ├── schemas/             # Pydantic模式
-│   │   ├── user.py          # 用户模式
-│   │   └── project.py       # 项目模式
-│   ├── services/            # 业务逻辑
-│   │   └── matching.py      # 匹配算法
-│   ├── utils/               # 工具函数
-│   └── main.py              # 主应用
-├── tests/                   # 测试文件
-├── alembic/                 # 数据库迁移
-├── requirements.txt         # 依赖包
-├── .env.example            # 环境配置示例
-└── README.md               # 项目文档
+├── backend/                 # 后端代码
+│   ├── api/                # API接口
+│   ├── models/             # 数据模型
+│   ├── services/           # 业务逻辑
+│   ├── utils/              # 工具函数
+│   └── tests/              # 测试用例
+├── frontend/               # 前端代码
+│   ├── src/               # 源代码
+│   ├── public/            # 静态资源
+│   └── package.json       # 依赖配置
+├── ai-engine/             # AI引擎
+│   ├── models/           # AI模型
+│   ├── training/         # 训练脚本
+│   └── inference/        # 推理服务
+├── data/                  # 数据存储
+│   ├── raw/              # 原始数据
+│   ├── processed/        # 处理后的数据
+│   └── models/           # 训练好的模型
+├── docs/                  # 项目文档
+│   ├── api/              # API文档
+│   ├── user/             # 用户手册
+│   └── dev/              # 开发文档
+├── scripts/               # 脚本工具
+│   ├── deploy/           # 部署脚本
+│   ├── data/             # 数据处理脚本
+│   └── utils/            # 工具脚本
+├── tests/                 # 测试代码
+├── docker-compose.yml     # Docker编排
+├── Dockerfile            # Docker配置
+├── requirements.txt      # Python依赖
+├── .env.example          # 环境变量示例
+├── .gitignore           # Git忽略文件
+└── README.md            # 项目说明
 ```
 
-## 🔧 API端点
+## API文档
 
-### 认证相关
-- `POST /api/v1/auth/register` - 用户注册
+### 主要接口
+
+#### 基础接口
+- `GET /` - 首页
+- `GET /health` - 健康检查
+- `GET /api/v1/status` - 系统状态
+
+#### 数据接口
+- `GET /api/v1/data` - 获取数据列表
+- `POST /api/v1/data` - 上传数据
+- `GET /api/v1/data/<built-in function id>` - 获取特定数据
+
+#### 分析接口
+- `POST /api/v1/analyze` - 数据分析
+- `GET /api/v1/analyze/<built-in function id>` - 获取分析结果
+- `GET /api/v1/reports` - 获取报告列表
+
+#### 用户接口
 - `POST /api/v1/auth/login` - 用户登录
-- `POST /api/v1/auth/refresh` - 刷新令牌
-- `POST /api/v1/auth/password-reset` - 请求密码重置
-- `POST /api/v1/auth/password-reset/confirm` - 确认密码重置
-
-### 用户管理
+- `POST /api/v1/auth/register` - 用户注册
 - `GET /api/v1/users/me` - 获取当前用户信息
-- `PUT /api/v1/users/me` - 更新当前用户信息
-- `GET /api/v1/users/me/client-profile` - 获取需求方资料
-- `PUT /api/v1/users/me/client-profile` - 更新需求方资料
-- `GET /api/v1/users/me/provider-profile` - 获取供给方资料
-- `PUT /api/v1/users/me/provider-profile` - 更新供给方资料
-- `POST /api/v1/users/me/skills` - 添加技能
-- `GET /api/v1/users/search` - 搜索用户
 
-### 项目管理
-- `POST /api/v1/projects/` - 创建项目
-- `GET /api/v1/projects/` - 获取项目列表
-- `GET /api/v1/projects/my-projects` - 获取我的项目
-- `GET /api/v1/projects/{project_id}` - 获取项目详情
-- `PUT /api/v1/projects/{project_id}` - 更新项目
-- `DELETE /api/v1/projects/{project_id}` - 删除项目
-- `POST /api/v1/projects/{project_id}/publish` - 发布项目
-- `POST /api/v1/projects/{project_id}/milestones` - 添加里程碑
-- `GET /api/v1/projects/{project_id}/matches` - 获取项目匹配
+### 详细文档
 
-### 技能管理
-- `GET /api/v1/skills/` - 获取技能列表
-- `POST /api/v1/skills/` - 创建技能
-- `GET /api/v1/skills/categories` - 获取技能分类
-- `GET /api/v1/skills/popular/list` - 获取热门技能
+启动服务后，访问以下地址查看完整API文档：
 
-### 匹配管理
-- `GET /api/v1/matches/` - 获取匹配列表
-- `GET /api/v1/matches/my-matches` - 获取我的匹配
-- `POST /api/v1/matches/auto-match/{project_id}` - 自动匹配项目
-- `POST /api/v1/matches/{match_id}/accept` - 接受匹配
-- `POST /api/v1/matches/{match_id}/proposal` - 创建提案
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **OpenAPI JSON**: http://localhost:8000/openapi.json
 
-### 评价管理
-- `POST /api/v1/reviews/` - 创建评价
-- `GET /api/v1/reviews/` - 获取评价列表
-- `GET /api/v1/reviews/my-reviews` - 获取我的评价
-- `GET /api/v1/reviews/stats/{user_id}` - 获取用户评价统计
+## 配置说明
 
-## 🧮 智能匹配算法
+### 环境变量
 
-平台采用多维度智能匹配算法，基于以下因素计算匹配分数：
+创建 `.env` 文件并配置以下变量：
 
-1. **技能匹配 (35%)**：项目所需技能与供给方技能的匹配度
-2. **经验匹配 (25%)**：项目经验要求与供给方实际经验的匹配度
-3. **预算匹配 (20%)**：项目预算与供给方费率的匹配度
-4. **地点匹配 (10%)**：项目地点偏好与供给方位置的匹配度
-5. **可用性匹配 (10%)**：供给方当前可用性状态
-
-## 🔒 安全特性
-
-- JWT令牌认证
-- 密码加密存储
-- CORS保护
-- 输入数据验证
-- SQL注入防护
-- XSS防护
-
-## 📊 数据库设计
-
-平台包含以下核心数据表：
-
-- **users** - 用户基础表
-- **client_profiles** - 需求方资料表
-- **provider_profiles** - 供给方资料表
-- **skills** - 技能表
-- **provider_skills** - 供给方技能关联表
-- **projects** - 项目表
-- **project_milestones** - 项目里程碑表
-- **matches** - 匹配记录表
-- **proposals** - 提案表
-- **reviews** - 评价表
-- **payments** - 支付记录表
-
-## 🚀 部署指南
-
-### 开发环境
 ```bash
-python -m app.main
+# 基础配置
+DEBUG=True
+SECRET_KEY=your-secret-key
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# 数据库配置
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+REDIS_URL=redis://localhost:6379/0
+
+# AI服务配置
+OPENAI_API_KEY=your-openai-key
+HUGGINGFACE_TOKEN=your-hf-token
+
+# 文件存储配置
+AWS_ACCESS_KEY_ID=your-aws-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret
+AWS_STORAGE_BUCKET_NAME=your-bucket-name
+
+# 邮件配置
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your-email-password
 ```
 
-### 生产环境
+## 部署指南
+
+### Docker部署（推荐）
+
+1. **构建镜像**
 ```bash
-# 使用gunicorn
-pip install gunicorn
-gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
-
-# 或使用uvicorn
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+docker build -t opc-marketplace .
 ```
 
-### Docker部署
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY . .
-EXPOSE 8000
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+2. **运行容器**
+```bash
+docker run -d -p 8000:8000 --name opc-marketplace opc-marketplace
 ```
 
-## 🤝 贡献指南
+3. **使用Docker Compose**
+```bash
+docker-compose up -d
+```
 
-1. Fork项目
-2. 创建功能分支
-3. 提交更改
-4. 推送到分支
-5. 创建Pull Request
+## 测试
 
-## 📄 许可证
+### 运行测试
 
-MIT License
+```bash
+# 运行所有测试
+python -m pytest tests/
 
-## 📞 联系方式
+# 运行特定测试
+python -m pytest tests/test_api.py
 
-- 项目地址：https://github.com/MoKangMedical/opc-marketplace
-- 文档地址：https://mokangmedical.github.io/opc-legends/
+# 生成测试覆盖率报告
+python -m pytest --cov=app tests/
+```
+
+## 贡献指南
+
+我们欢迎任何形式的贡献！请遵循以下步骤：
+
+1. **Fork本仓库**
+2. **创建特性分支**
+```bash
+git checkout -b feature/AmazingFeature
+```
+
+3. **提交更改**
+```bash
+git commit -m 'Add some AmazingFeature'
+```
+
+4. **推送到分支**
+```bash
+git push origin feature/AmazingFeature
+```
+
+5. **创建Pull Request**
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE) 许可证。
+
+## 联系方式
+
+- **项目维护者**: MoKangMedical
+- **邮箱**: contact@mokangmedical.com
+- **项目主页**: https://github.com/MoKangMedical/opc-marketplace
+- **问题反馈**: https://github.com/MoKangMedical/opc-marketplace/issues
+
+## 致谢
+
+感谢所有为这个项目做出贡献的开发者和医疗领域专家！
 
 ---
 
-**OPC Marketplace** - 连接需求与供给，赋能独立创业者
-## 📐 理论基础
-
-> **Harness理论**：在AI领域，Harness（环境设计）比模型本身更重要。使性能提升64%。
-
-> **红杉论点**：从卖工具到卖结果。
+**注意**: 这是一个活跃开发中的项目，API和功能可能会发生变化。请定期查看更新日志获取最新信息。
